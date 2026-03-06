@@ -45,3 +45,4 @@ auth.json
 # sub-project artifacts
 web/node_modules/
 web/.next/
+.vercel

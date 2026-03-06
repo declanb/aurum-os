@@ -51,7 +51,7 @@ def get_approval_events(*, session: Session = Depends(get_session), trade_id: in
     events = session.exec(
         select(ApprovalEvent)
         .where(ApprovalEvent.trade_idea_id == trade_id)
-        .order_by(ApprovalEvent.created_at.desc())
+        .order_by(ApprovalEvent.timestamp.desc())
     ).all()
     
     return [e.model_dump() for e in events]

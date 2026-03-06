@@ -4,6 +4,7 @@ from api.routers import notes
 from api.routers import trades
 from api.routers import approvals
 from api.routers import journal
+from api.routers import vantage
 
 app = FastAPI(
     title="AURUM OS API",

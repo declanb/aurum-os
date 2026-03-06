@@ -6,10 +6,26 @@ from datetime import datetime, timezone
 from api.core.db import get_session
 from api.models.trade import TradeIdea, TradeIdeaVersion
 from api.schemas.trade import TradeIdeaCreate, TradeIdeaRead, TradeIdeaUpdate
+from api.services.guardian import guardian_service
 
 router = APIRouter(prefix="/trades", tags=["trade-ideas"])
 
 MOCK_USER_ID = "seed_user"
+
+@router.post("/{trade_id}/challenge", response_model=dict)
+def challenge_trade(*, session: Session = Depends(get_session), trade_id: int):
+    trade = session.get(TradeIdea, trade_id)
+    if not trade or trade.user_id != MOCK_USER_ID:
+        raise HTTPException(status_code=404, detail="Trade idea not found")
+    
+    result = guardian_service.challenge_trade(trade)
+    
+    if result["passed"]:
+        trade.status = "Ready for Approval"
+        session.add(trade)
+        session.commit()
+    
+    return result
 
 @router.post("/", response_model=TradeIdeaRead)
 def create_trade(*, session: Session = Depends(get_session), trade: TradeIdeaCreate):

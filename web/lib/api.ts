@@ -98,6 +98,19 @@ export async function updateTrade(id: number, data: Partial<TradeIdea>): Promise
     }
 }
 
+export async function challengeTrade(id: number): Promise<any | null> {
+    try {
+        const res = await fetch(`${API_URL}/trades/${id}/challenge`, {
+            method: "POST",
+        });
+        if (!res.ok) throw new Error("Failed to challenge trade");
+        return res.json();
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
 export async function processApproval(tradeId: number, action: "APPROVE" | "REJECT", reasoning?: string): Promise<{ status: string, new_state: string } | null> {
     try {
         const res = await fetch(`${API_URL}/approvals/${tradeId}`, {
@@ -154,6 +167,45 @@ export async function createJournalEntry(data: any): Promise<any | null> {
             body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error("Failed to create journal entry");
+        return res.json();
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
+// --- Vantage Broker API ---
+
+export async function fetchVantageAccount(): Promise<any | null> {
+    try {
+        const res = await fetch(`${API_URL}/vantage/account`);
+        if (!res.ok) throw new Error("Failed to fetch Vantage account info");
+        return res.json();
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
+export async function fetchVantageStatus(): Promise<any | null> {
+    try {
+        const res = await fetch(`${API_URL}/vantage/status`);
+        if (!res.ok) throw new Error("Failed to fetch Vantage status");
+        return res.json();
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
+export async function executeTrade(tradeId: number, volume: number = 0.01): Promise<any | null> {
+    try {
+        const res = await fetch(`${API_URL}/vantage/execute/${tradeId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ volume, use_market: true }),
+        });
+        if (!res.ok) throw new Error("Failed to execute trade on Vantage");
         return res.json();
     } catch (error) {
         console.error(error);
