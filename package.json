@@ -1,0 +1,13 @@
+{
+    "name": "aurum-os-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
+        "dev:web": "cd web && npm run dev",
+        "dev:api": "uvicorn api.index:app --reload --port 8000"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}
