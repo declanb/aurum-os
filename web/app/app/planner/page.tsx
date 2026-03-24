@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { GlassCard } from "@/components/GlassCard";
 import { Badge } from "@/components/ui/badge";
