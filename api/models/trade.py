@@ -4,7 +4,7 @@ from sqlmodel import SQLModel, Field, Relationship
 
 class TradeIdeaBase(SQLModel):
     user_id: str = Field(index=True)
-    symbol: str = Field(default="XAUUSD")
+    symbol: str = Field(default="BTC-EUR")
     direction: str
     entry_price: float
     stop_price: float

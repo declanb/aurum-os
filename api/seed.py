@@ -20,24 +20,24 @@ def seed():
         print("Seeding database...")
         trade1 = TradeIdea(
             user_id="seed_user",
-            symbol="XAUUSD",
+            symbol="BTC-EUR",
             direction="LONG",
-            entry_price=2045.50,
-            stop_price=2030.00,
-            target_price=2080.00,
-            invalidation_notes="4H close below 2028 breaks market structure.",
+            entry_price=61500.00,
+            stop_price=60700.00,
+            target_price=64000.00,
+            invalidation_notes="4H close below 65800 breaks market structure.",
             thesis="Bullish order block tap and sweep of Asian session lows.",
             status="Approved"
         )
         
         trade2 = TradeIdea(
             user_id="seed_user",
-            symbol="XAUUSD",
+            symbol="BTC-EUR",
             direction="SHORT",
-            entry_price=2085.00,
-            stop_price=2092.00,
-            target_price=2060.00,
-            invalidation_notes="Strong H1 close above 2095 opens door to 2100+.",
+            entry_price=65500.00,
+            stop_price=66400.00,
+            target_price=63000.00,
+            invalidation_notes="Strong H1 close above 72500 opens door to 73k+.",
             thesis="Bearish divergence on H4 RSI, tapping into weekly supply zone.",
             status="Draft"
         )

@@ -1,14 +1,9 @@
-"use client";
+// DEPRECATED - DELETE THIS FILE
+// The real dashboard is at /app/app/page.tsx
 
-import { useEffect, useState } from "react";
-import { fetchTrades, fetchRxAccount, type TradeIdea, type RxAccount } from "@/lib/api";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, AlertCircle, CheckCircle2, Clock, ArrowRight } from "lucide-react";
-import Link from "next/link";
-
-export default function Dashboard() {
+// Empty export to prevent build errors
+const _unused = null;
+export { _unused };
   const [account, setAccount] = useState<RxAccount | null>(null);
   const [trades, setTrades] = useState<TradeIdea[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,15 +40,12 @@ export default function Dashboard() {
       return sum;
     }, 0) ?? 0;
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-
   return (
     <div className="space-y-6 max-w-7xl">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">
-          {greeting}, Declan.
+          Good afternoon, Declan.
         </h1>
         <p className="text-muted-foreground">Here's what Aurum OS is tracking for you.</p>
       </div>
@@ -159,7 +151,7 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-3">
               {pendingApproval.slice(0, 3).map((trade) => {
-                const isLong = trade.direction === "LONG";
+                const isLong = trade.direction === "Long";
                 return (
                   <div
                     key={trade.id}
@@ -183,10 +175,10 @@ export default function Dashboard() {
                           Entry: <span className="font-mono text-foreground">{trade.entry_price}</span>
                         </span>
                         <span>
-                          SL: <span className="font-mono text-foreground">{trade.stop_price}</span>
+                          SL: <span className="font-mono text-foreground">{trade.stop_loss}</span>
                         </span>
                         <span>
-                          TP: <span className="font-mono text-foreground">{trade.target_price}</span>
+                          TP: <span className="font-mono text-foreground">{trade.take_profit}</span>
                         </span>
                       </div>
                       <Link href="/app/approvals">

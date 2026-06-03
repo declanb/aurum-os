@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 
 class MarketNoteBase(BaseModel):
-    symbol: str = "XAUUSD"
+    symbol: str = "BTC-EUR"
     timeframe: str = "4H"
     content: str
     market_state: Optional[str] = None

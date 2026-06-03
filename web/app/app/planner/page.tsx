@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { GlassCard } from "@/components/GlassCard";
+import { AiRecommendations } from "@/components/AiRecommendations";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import { fetchTrades, createTrade, updateTrade, challengeTrade, TradeIdea } from
 export default function TradePlanner() {
     const [trades, setTrades] = useState<TradeIdea[]>([]);
     const [activeTrade, setActiveTrade] = useState<Partial<TradeIdea>>({
-        symbol: "XAUUSD",
+        symbol: "BTC-USD",
         direction: "LONG",
         status: "Draft"
     });
@@ -65,7 +66,7 @@ export default function TradePlanner() {
     const startNewTrade = () => {
         setGuardianResult(null);
         setActiveTrade({
-            symbol: "XAUUSD",
+            symbol: "BTC-USD",
             direction: "LONG",
             status: "Draft",
             entry_price: 0,
@@ -119,6 +120,11 @@ export default function TradePlanner() {
 
             {/* Main Workspace */}
             <div className="flex-1 flex flex-col overflow-y-auto">
+                {/* AI Recommendations Section */}
+                <div className="mb-6">
+                    <AiRecommendations onTradeCreated={loadTrades} />
+                </div>
+
                 <div className="flex justify-between items-end mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground mb-2">Trade Planner</h1>

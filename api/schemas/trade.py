@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 
 class TradeIdeaBase(BaseModel):
-    symbol: str = "XAUUSD"
+    symbol: str = "BTC-EUR"
     direction: str
     entry_price: float
     stop_price: float

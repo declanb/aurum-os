@@ -4,7 +4,9 @@ from api.routers import notes
 from api.routers import trades
 from api.routers import approvals
 from api.routers import journal
-from api.routers import vantage
+from api.routers import revolut_x
+from api.routers import recommendations
+from api.routers import agent
 
 app = FastAPI(
     title="AURUM OS API",
@@ -33,4 +35,6 @@ app.include_router(notes.router, prefix="/api")
 app.include_router(trades.router, prefix="/api")
 app.include_router(approvals.router, prefix="/api")
 app.include_router(journal.router, prefix="/api")
-app.include_router(vantage.router, prefix="/api")
+app.include_router(revolut_x.router, prefix="/api")
+app.include_router(recommendations.router, prefix="/api")
+app.include_router(agent.router, prefix="/api")

@@ -39,7 +39,7 @@ export default function AnalysisWorkspace() {
         setIsSaving(true);
         try {
             await createNote({
-                symbol: "XAUUSD",
+                symbol: "BTC-USD",
                 ...formData
             });
         } catch (error) {
@@ -76,7 +76,7 @@ export default function AnalysisWorkspace() {
                     <GlassCard className="flex-1 flex flex-col overflow-hidden min-h-[400px]">
                         <div className="h-12 border-b border-border bg-muted/50 px-4 flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-4">
-                                <span className="text-foreground font-bold tracking-wide">XAUUSD</span>
+                                <span className="text-foreground font-bold tracking-wide">BTC-USD</span>
                                 <div className="flex gap-2">
                                     {['1H', '4H', 'D', 'W'].map(tf => (
                                         <button

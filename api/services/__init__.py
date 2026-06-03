@@ -1,1 +1,1 @@
-# Vantage / MetaApi broker services
+# Revolut X broker services (CLI-backed via `revx`)
