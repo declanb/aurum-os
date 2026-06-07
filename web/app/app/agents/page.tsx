@@ -47,7 +47,7 @@ export default function AgentsPage() {
         fetch(`${API_URL}/agent/status`),
       ]);
 
-      const agentsData = agentsRes.ok ? await agentsRes.json() : {};
+      const agentsData: AgentRegistry = agentsRes.ok ? await agentsRes.json() : {};
       const statusData = statusRes.ok ? await statusRes.json() : null;
 
       setAgents(agentsData);
