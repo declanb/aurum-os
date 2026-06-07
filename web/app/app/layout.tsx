@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { LineChart, BookOpen, Settings, ShieldAlert, FileText, LayoutDashboard, Wallet } from "lucide-react";
+import { LineChart, BookOpen, Settings, ShieldAlert, FileText, LayoutDashboard, Wallet, Bot } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BalancePill } from "@/components/BalancePill";
+import { PaperModePill } from "@/components/PaperModePill";
 
 const NAV_ITEMS = [
     { href: "/app", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/app/my-trade", icon: Wallet, label: "My Trade" },
     { href: "/app/exchange", icon: LineChart, label: "Exchange" },
+    { href: "/app/agents", icon: Bot, label: "Agents" },
     { href: "/app/approvals", icon: ShieldAlert, label: "Approvals" },
     { href: "/app/planner", icon: FileText, label: "Planner" },
     { href: "/app/journal", icon: BookOpen, label: "Journal" },
@@ -44,9 +46,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <main className="flex-1 flex flex-col min-w-0">
                 <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 shrink-0">
                     <div className="flex items-center gap-3">
-                        <h2 className="text-base font-bold text-foreground tracking-tight">AURUM <span className="text-primary">OS</span></h2>
+                        <h2 className="text-base font-bold text-foreground tracking-tight"><span className="text-primary">Helm</span></h2>
                     </div>
                     <div className="flex items-center gap-4">
+                        <PaperModePill />
                         <BalancePill />
                         <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>

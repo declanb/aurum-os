@@ -73,7 +73,7 @@ export default function AnalysisWorkspace() {
                 {/* Left Column: Chart & State */}
                 <div className="col-span-1 lg:col-span-2 flex flex-col gap-6 h-full">
                     {/* Chart Placeholder */}
-                    <GlassCard className="flex-1 flex flex-col overflow-hidden min-h-[400px]">
+                    <GlassCard className="flex-1 flex flex-col overflow-hidden min-h-100">
                         <div className="h-12 border-b border-border bg-muted/50 px-4 flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-4">
                                 <span className="text-foreground font-bold tracking-wide">BTC-USD</span>

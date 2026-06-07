@@ -14,6 +14,7 @@ import subprocess
 from fastapi import APIRouter, HTTPException
 from typing import Dict
 
+from api.core.config import settings
 from api.services import agent_registry
 
 router = APIRouter(prefix="/agent", tags=["agents"])
@@ -58,6 +59,7 @@ async def get_status() -> dict:
         "running": running,
         "stale": stale,
         "paused": paused,
+        "paper_trading": settings.PAPER_TRADING,
     }
 
 

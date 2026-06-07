@@ -18,7 +18,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 source .venv/bin/activate
 
-PLAYBOOK=${1:-trend_follower}
+PLAYBOOK=${1:-macro}
 SYMBOLS="BTC-USD,ETH-USD,SOL-USD,ATOM-USD"
 POLL_MINUTES=15
 

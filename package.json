@@ -7,6 +7,9 @@
         "dev:web": "cd web && npm run dev",
         "dev:api": "uvicorn api.index:app --reload --port 8000"
     },
+    "dependencies": {
+        "@revolut/revolut-x-cli": "^1.0.0"
+    },
     "devDependencies": {
         "concurrently": "^8.2.2"
     }

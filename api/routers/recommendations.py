@@ -44,7 +44,7 @@ async def get_edge(user_id: Optional[str] = Query(None)) -> dict:
 async def get_recommendations(
     symbols: Optional[str] = Query(None, description="Comma-separated list of symbols (e.g., 'BTC-USD,ETH-USD')"),
     max_results: int = Query(3, ge=1, le=10, description="Maximum number of recommendations to return"),
-    playbook: Optional[str] = Query(None, description="Trader lens: wyckoff | ict_smc | trend_follower | macro | livermore"),
+    playbook: Optional[str] = Query(None, description="Trader lens: wyckoff | ict_smc | trend_follower | macro | livermore | mean_reversion"),
     user_id: Optional[str] = Query(None, description="If provided, biases recommendations using this user's approved-trade history"),
 ) -> List[dict]:
     """

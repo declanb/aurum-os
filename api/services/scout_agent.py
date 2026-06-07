@@ -101,11 +101,9 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
                 await asyncio.sleep(60)
                 continue
             
-            # Check if auto-approve is enabled
+            # Check if auto-approve is enabled (scout still runs + stages either way)
             if not settings.AURUM_AUTO_APPROVE:
-                logger.info("[Iter %d] AURUM_AUTO_APPROVE=False, skipping", iteration)
-                await asyncio.sleep(60)
-                continue
+                logger.info("[Iter %d] AURUM_AUTO_APPROVE=False — will stage recs only, no auto-approval", iteration)
             
             logger.info("[Iter %d] ──── SCOUT RUN ────", iteration)
             
@@ -132,21 +130,33 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
             
             # Evaluate each
             approved_count = 0
+            staged_count = 0
             for rec in recs:
                 symbol = rec.get("symbol")
-                
-                # Pre-gate: don't auto-approve if profit_hunter already owns this symbol
+
+                # Pre-gate: don't act on symbols already claimed by another agent (e.g. profit_hunter)
                 if agent_registry.is_symbol_claimed(symbol):
                     logger.info("  %s: SKIP (already claimed by another agent)", symbol)
                     continue
-                
-                # Run the auto-approve gate
+
+                # Always stage the rec into the approval queue so the human can see it.
+                try:
+                    with Session(engine) as session:
+                        staged, stage_msg, staged_id = auto_approver.stage_recommendation(session, rec)
+                        if staged:
+                            logger.info("  %s: 📋 STAGED #%s (%s)", symbol, staged_id, stage_msg)
+                            staged_count += 1
+                        else:
+                            logger.info("  %s: not staged (%s)", symbol, stage_msg)
+                except Exception as exc:
+                    logger.error("  %s: ERROR staging rec: %s", symbol, exc)
+
+                # Then attempt auto-approve (flips status to Approved if all gates pass)
                 eligible, reason = auto_approver.evaluate(rec, edge)
                 if not eligible:
-                    logger.info("  %s: NOT ELIGIBLE (%s)", symbol, reason)
+                    logger.info("  %s: AUTO-APPROVE skipped (%s)", symbol, reason)
                     continue
-                
-                # Try to auto-approve
+
                 try:
                     with Session(engine) as session:
                         approved, msg, trade_id = auto_approver.try_auto_approve(session, rec, edge)
@@ -154,14 +164,11 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
                             logger.info("  %s: ✅ AUTO-APPROVED trade #%s (%s)", symbol, trade_id, msg)
                             approved_count += 1
                         else:
-                            logger.info("  %s: ❌ BLOCKED (%s)", symbol, msg)
+                            logger.info("  %s: ❌ AUTO-APPROVE blocked (%s)", symbol, msg)
                 except Exception as exc:
                     logger.error("  %s: ERROR during auto-approve: %s", symbol, exc)
-            
-            if approved_count > 0:
-                logger.info("[Iter %d] Approved %d trade(s) this cycle", iteration, approved_count)
-            else:
-                logger.info("[Iter %d] No trades approved this cycle", iteration)
+
+            logger.info("[Iter %d] Staged %d, auto-approved %d", iteration, staged_count, approved_count)
             
             # Sleep until next poll
             logger.info("[Iter %d] Sleeping for %d minutes...\n", iteration, poll_minutes)
@@ -180,7 +187,7 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
 
 def main():
     parser = argparse.ArgumentParser(description="Aurum Scout Agent — autonomous AI trade advisor")
-    parser.add_argument("--playbook", default="trend_follower", help="Trader lens (wyckoff, ict_smc, trend_follower, macro, livermore)")
+    parser.add_argument("--playbook", default="trend_follower", help="Trader lens (wyckoff, ict_smc, trend_follower, macro, livermore, mean_reversion)")
     parser.add_argument("--symbols", default="BTC-USD,ETH-USD,SOL-USD", help="Comma-separated symbols to monitor")
     parser.add_argument("--poll-minutes", type=int, default=15, help="Poll interval in minutes")
     

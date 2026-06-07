@@ -53,6 +53,27 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%H:%M:%S")
 
 
+def _notify_macos(title: str, message: str, sound: str = "Glass") -> None:
+    """Fire a macOS desktop notification via osascript. Silent on non-Mac / failure."""
+    try:
+        import subprocess
+        # Escape double-quotes for AppleScript
+        safe_title = title.replace('"', "'")
+        safe_msg = message.replace('"', "'")
+        script = (
+            f'display notification "{safe_msg}" with title "{safe_title}" sound name "{sound}"'
+        )
+        subprocess.run(
+            ["osascript", "-e", script],
+            check=False,
+            timeout=5,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Notification failed (non-fatal): %s", exc)
+
+
 async def _get_bid(symbol: str) -> Optional[float]:
     """Fetch live bid from Revolut X. Returns None on failure."""
     try:
@@ -147,7 +168,7 @@ async def hunt(
                 agent_registry.heartbeat(agent_id)
                 heartbeat_counter = 0
             heartbeat_counter += 1
-            
+
             # Check global pause
             if agent_registry.is_paused():
                 logger.info("⏸  Global pause active, skipping poll")
@@ -161,8 +182,8 @@ async def hunt(
                 elapsed += poll_secs
                 continue
 
-        if bid > best_bid_seen:
-            best_bid_seen = bid
+            if bid > best_bid_seen:
+                best_bid_seen = bid
 
             pnl, pnl_pct = _net_pnl(qty, bid, cost_eur)
             status = "🟢" if pnl > 0 else "🔴" if pnl < -0.01 else "⚪"
@@ -211,6 +232,13 @@ async def _execute_sell(symbol: str, qty: float, expected_bid: float) -> dict:
         logger.info("✅ SELL ORDER PLACED")
         logger.info(json.dumps(order, indent=2))
 
+        base = symbol.split("-")[0]
+        # Initial "order placed" notification — fires immediately regardless of fill
+        _notify_macos(
+            title=f"Helm: Sell placed for {base}",
+            message=f"Market sell {qty} {base} @ ~€{expected_bid:,.4f}",
+        )
+
         # Fetch full order details for P&L
         order_id = order.get("venue_order_id") or order.get("id")
         if order_id:
@@ -222,17 +250,27 @@ async def _execute_sell(symbol: str, qty: float, expected_bid: float) -> dict:
                 filled_qty = float(d.get("filled_quantity", 0))
                 slippage_pct = ((fill_price - expected_bid) / expected_bid) * 100
                 logger.info("")
-                logger.info(f"📈 FILL DETAILS:")
-                logger.info(f"   Filled qty:     {filled_qty} {symbol.split('-')[0]}")
+                logger.info("📈 FILL DETAILS:")
+                logger.info(f"   Filled qty:     {filled_qty} {base}")
                 logger.info(f"   Avg fill price: €{fill_price:,.2f}")
                 logger.info(f"   Expected bid:   €{expected_bid:,.2f}")
                 logger.info(f"   Slippage:       {slippage_pct:+.3f}%")
-                return {"success": True, "order": d, "fill_price": fill_price}
+                # Filled notification with real numbers
+                _notify_macos(
+                    title=f"Helm: ✅ {base} sold @ €{fill_price:,.4f}",
+                    message=f"Filled {filled_qty} {base} · slippage {slippage_pct:+.2f}%",
+                )
+                return {"success": True, "order": d, "fill_price": fill_price, "filled_qty": filled_qty}
 
         return {"success": True, "order": order}
 
     except Exception as exc:
         logger.error(f"❌ Sell failed: {exc}")
+        _notify_macos(
+            title=f"Helm: ❌ Sell FAILED for {symbol.split('-')[0]}",
+            message=str(exc)[:200],
+            sound="Basso",
+        )
         return {"success": False, "reason": str(exc)}
 
 

@@ -93,6 +93,29 @@ PLAYBOOKS: dict[str, Playbook] = {
             "If price is mid-range (no pivot in play), pass."
         ),
     },
+    "mean_reversion": {
+        "id": "mean_reversion",
+        "name": "Oversold Mean Reversion",
+        "trader": "Larry Connors / Linda Raschke",
+        "style": "Counter-trend / mean-reversion (LONG-only, spot-safe)",
+        "briefing": (
+            "Hunt for exhausted selloffs into proven support — buy fear, sell complacency. "
+            "LONG-ONLY playbook (spot-safe). Setup checklist (need ≥3 of 5):\n"
+            "  1. Price within 1% of a documented support level OR prior swing low\n"
+            "  2. RSI(14) on 1H below 30, or RSI(14) on 4H below 35\n"
+            "  3. Recent candles show selling exhaustion: long lower wicks, declining volume on red, "
+            "     or a bullish hammer/engulfing on the LTF\n"
+            "  4. Higher-timeframe trend NOT in freefall — price still above prior major low, "
+            "     no fresh breakdown in last 24h\n"
+            "  5. Bullish divergence: price makes lower low but RSI/momentum makes higher low\n"
+            "Entry: at-or-just-above the support level (limit, not market).\n"
+            "Stop: 1.0–1.5% below support, below the recent wick low.\n"
+            "Target: prior consolidation midpoint or the 20-SMA on the entry timeframe — "
+            "this is a BOUNCE trade, not a trend reversal. Min R:R 1.5.\n"
+            "REJECT if: price in freefall with no support nearby, no oversold signal, "
+            "or asset breaking down from a major structure. Better to pass than catch a knife."
+        ),
+    },
 }
 
 DEFAULT_PLAYBOOK = "trend_follower"

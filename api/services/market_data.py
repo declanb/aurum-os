@@ -86,6 +86,7 @@ async def get_account_info() -> dict:
                 "currency": b.get("currency"),
                 "available": float(b.get("available") or 0),
                 "reserved": float(b.get("reserved") or 0),
+                "staked": float(b.get("staked") or 0),
                 "balance": float(b.get("total") or b.get("balance") or 0),
             }
             for b in rows

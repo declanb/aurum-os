@@ -349,17 +349,103 @@ export async function fetchRxStatus(): Promise<{ connected: boolean; broker: str
 
 export const fetchRevolutXStatus = fetchRxStatus;
 
-export async function executeTrade(tradeId: number, volume: number = 0.0001): Promise<any | null> {
+export type OpenAIBalance = {
+    connected: boolean;
+    plan: string;
+    total_granted: number | null;
+    total_used: number | null;
+    total_available: number | null;
+    currency: string;
+    message?: string;
+};
+
+export async function fetchOpenAIBalance(): Promise<OpenAIBalance | null> {
     try {
-        const res = await fetch(`${API_URL}/revolut-x/execute/${tradeId}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ volume, use_market: true }),
-        });
-        if (!res.ok) throw new Error("Failed to execute trade on Revolut X");
+        const res = await fetch(`${API_URL}/openai/balance`);
+        if (!res.ok) return null;
         return res.json();
     } catch (error) {
         console.error(error);
+        return null;
+    }
+}
+
+export async function executeTrade(
+    tradeId: number,
+    opts: { volume?: number; quoteEur?: number } = {},
+): Promise<any | null> {
+    try {
+        const body: Record<string, unknown> = { use_market: true };
+        if (opts.quoteEur !== undefined) {
+            body.quote_eur = opts.quoteEur;
+        } else {
+            body.volume = opts.volume ?? 0.0001;
+        }
+        const res = await fetch(`${API_URL}/revolut-x/execute/${tradeId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            // Surface the actual backend error instead of a generic message
+            let errMsg = `HTTP ${res.status}`;
+            try {
+                const errBody = await res.json();
+                errMsg = errBody.detail || errBody.message || JSON.stringify(errBody);
+            } catch {
+                errMsg = await res.text().catch(() => errMsg);
+            }
+            throw new Error(errMsg);
+        }
+        return res.json();
+    } catch (error) {
+        console.error("executeTrade failed:", error);
+        // Re-throw so caller can surface to user
+        throw error;
+    }
+}
+
+// ── Live positions (broker balances ⨝ DB fills ⨝ tickers) ──────────────────
+
+export type LivePosition = {
+    symbol: string;
+    asset: string;
+    qty: number;
+    available: number;
+    staked: number;
+    reserved: number;
+    tradeable: boolean;
+    is_staked: boolean;
+    bid: number;
+    ask: number;
+    entry_price: number | null;
+    cost_eur: number | null;
+    fees_eur: number;
+    current_value_eur: number;
+    pnl_eur: number | null;
+    pnl_pct: number | null;
+    has_db_record: boolean;
+    broker_order_id: string | null;
+};
+
+export type LivePositionsResponse = {
+    cash_eur: number;
+    positions_value_eur: number;
+    total_account_eur: number;
+    invested_eur: number;
+    total_pnl_eur: number;
+    positions: LivePosition[];
+    count: number;
+    unmatched_count: number;
+};
+
+export async function fetchLivePositions(): Promise<LivePositionsResponse | null> {
+    try {
+        const res = await fetch(`${API_URL}/revolut-x/positions/live`);
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error("fetchLivePositions failed:", error);
         return null;
     }
 }

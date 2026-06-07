@@ -6,7 +6,7 @@ export default function LandingPage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-background flex flex-col items-center justify-center p-6 text-center">
       {/* Subtle ambient lighting */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-150 h-150 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="z-10 max-w-3xl space-y-8">
         <div className="inline-flex h-9 items-center justify-center rounded-full border border-border bg-muted px-4 text-xs font-semibold uppercase tracking-widest text-primary">
@@ -14,11 +14,11 @@ export default function LandingPage() {
         </div>
 
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-foreground">
-          AURUM <span className="text-primary">OS</span>
+          <span className="text-primary">Helm</span>
         </h1>
 
         <p className="text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
-          AI-native gold trading copilot. Designed for disciplined, high-conviction discretionary execution with immutable audit trails.
+          AI-native crypto trading copilot. Designed for disciplined, high-conviction discretionary execution with immutable audit trails. You stay at the helm.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">

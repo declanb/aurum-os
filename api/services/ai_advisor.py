@@ -90,10 +90,13 @@ async def generate_recommendations(
 
     playbook = get_playbook(playbook_id)
 
-    # Check if OpenAI API key is properly configured (not just a placeholder)
+    # Check if either GitHub Models or OpenAI is available
     api_key = settings.OPENAI_API_KEY
-    if not api_key or api_key == "sk-..." or api_key.startswith("sk-..."):
-        logger.warning("OPENAI_API_KEY not properly configured — returning mock recommendations")
+    github_token = settings.GITHUB_TOKEN
+    has_openai = api_key and api_key != "sk-..." and not api_key.startswith("sk-...")
+    
+    if not github_token and not has_openai:
+        logger.warning("Neither GITHUB_TOKEN nor OPENAI_API_KEY configured — returning mock recommendations")
         return _decorate_mock(
             _generate_mock_recommendations(symbols[:max_recommendations]),
             playbook,
@@ -141,14 +144,10 @@ async def generate_recommendations(
             logger.error(f"Failed to generate recommendation for {symbol}: {exc}")
             continue
 
-    # If no recommendations were generated (e.g., market data unavailable), return mock data
+    # If GPT returned no setups, that's a VALID signal ("no opportunities right now").
+    # Only fall back to mock when there's no API key at all (handled at top of function).
     if not recommendations:
-        logger.warning("No recommendations generated from live data, falling back to mock recommendations")
-        return _decorate_mock(
-            _generate_mock_recommendations(symbols[:max_recommendations]),
-            playbook,
-            edge_fingerprint,
-        )
+        logger.info(f"GPT found no high-confidence setups across {len(symbols)} symbols with {playbook['id']} playbook")
 
     return recommendations
 
@@ -178,7 +177,16 @@ async def _analyze_with_gpt(
     try:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # GitHub Models (free with Copilot Enterprise) → OpenAI fallback → fail
+        if settings.GITHUB_TOKEN:
+            client = AsyncOpenAI(
+                base_url="https://models.inference.ai.azure.com",
+                api_key=settings.GITHUB_TOKEN,
+            )
+            logger.info(f"Using GitHub Models for {symbol}")
+        else:
+            client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            logger.info(f"Using OpenAI for {symbol}")
 
         # Build analysis prompt
         prompt = _build_analysis_prompt(symbol, price_data, indicators_1h, indicators_4h, candles_1h)
@@ -203,7 +211,10 @@ async def _analyze_with_gpt(
                 '  "reasoning": "string (detailed analysis)",\n'
                 '  "invalidation": "string (what proves this wrong)"\n'
                 "}\n\n"
-                "If no clear trade setup exists, return direction=null and confidence_score=0."
+                "If no clear trade setup exists, return direction=null and confidence_score=0.\n\n"
+                "EXECUTION CONSTRAINT (spot-only broker): Only LONG setups are actionable. "
+                "If the only edge you see is a SHORT, return direction=null instead — do NOT "
+                "force a LONG against the trend. Better to surface no setup than a bad one."
             ),
             format_briefing(playbook),
         ]
@@ -212,7 +223,7 @@ async def _analyze_with_gpt(
             system_blocks.append(edge_block)
 
         response = await client.chat.completions.create(
-            model="gpt-4o",
+            model=settings.OPENAI_MODEL,  # Defaults to gpt-4o-mini (cost protection)
             messages=[
                 {"role": "system", "content": "\n\n".join(system_blocks)},
                 {"role": "user", "content": prompt},

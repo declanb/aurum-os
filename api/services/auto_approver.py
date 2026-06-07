@@ -171,3 +171,96 @@ def try_auto_approve(
         session.rollback()
         logger.error("Auto-approve DB write failed: %s", exc)
         return False, f"db error: {exc}", None
+
+
+def stage_recommendation(
+    session: Session,
+    rec: dict,
+) -> tuple[bool, str, Optional[int]]:
+    """
+    Persist a recommendation as a 'Ready for Approval' TradeIdea so it appears
+    in the human approval queue. Does NOT enforce confidence/edge/R:R thresholds —
+    those gates only govern auto-approval. The human approves manually.
+
+    Guardian structural checks still apply (R:R floor, thesis length, invalidation).
+
+    Idempotency: skips if an open (Ready for Approval / Approved / Sent) TradeIdea
+    already exists for the same symbol + direction + entry price within the last 4h.
+    """
+    direction = (rec.get("direction") or "").upper()
+    if direction not in ("LONG", "SHORT"):
+        return False, "no direction", None
+
+    if direction == "SHORT" and not settings.AUTO_APPROVE_ALLOW_SHORTS:
+        return False, "SHORTs blocked (spot-only)", None
+
+    symbol = rec["symbol"]
+    entry = rec["entry_price"]
+
+    # Idempotency — don't spam duplicates each poll
+    since = datetime.now(timezone.utc) - timedelta(hours=4)
+    dup_stmt = (
+        select(TradeIdea)
+        .where(TradeIdea.user_id == MOCK_USER_ID)
+        .where(TradeIdea.symbol == symbol)
+        .where(TradeIdea.direction == direction)
+        .where(TradeIdea.status.in_(["Ready for Approval", "Approved", "Sent"]))  # type: ignore[attr-defined]
+        .where(TradeIdea.updated_at >= since)
+    )
+    for existing in session.exec(dup_stmt):
+        if abs(existing.entry_price - entry) / max(entry, 1e-9) < 0.005:  # within 0.5%
+            return False, f"duplicate of trade #{existing.id}", existing.id
+
+    playbook = rec.get("playbook_used") or {}
+    thesis = (
+        f"[SCOUT] {rec.get('thesis', '')[:140]} · "
+        f"Lens: {playbook.get('name', 'n/a')} · "
+        f"Conf {rec.get('confidence_score')} · R:R {rec.get('risk_reward')}"
+    )
+
+    trade = TradeIdea(
+        user_id=MOCK_USER_ID,
+        symbol=symbol,
+        direction=direction,
+        entry_price=entry,
+        stop_price=rec["stop_price"],
+        target_price=rec["target_price"],
+        thesis=thesis,
+        invalidation_notes=rec.get("invalidation") or "Scout: invalidate on stop trigger",
+        status="Draft",
+    )
+
+    check = guardian_service.challenge_trade(trade)
+    if not check.get("passed"):
+        return False, f"Guardian blocked: {', '.join(check.get('issues', []))}", None
+
+    try:
+        session.add(trade)
+        session.commit()
+        session.refresh(trade)
+
+        version = TradeIdeaVersion(
+            user_id=MOCK_USER_ID,
+            symbol=trade.symbol,
+            direction=trade.direction,
+            entry_price=trade.entry_price,
+            stop_price=trade.stop_price,
+            target_price=trade.target_price,
+            thesis=trade.thesis,
+            invalidation_notes=trade.invalidation_notes,
+            trade_idea_id=trade.id,  # type: ignore[arg-type]
+            version_number=1,
+        )
+        session.add(version)
+
+        trade.status = "Ready for Approval"
+        trade.updated_at = datetime.now(timezone.utc)
+        session.add(trade)
+        session.commit()
+        session.refresh(trade)
+
+        return True, "staged for review", trade.id
+    except Exception as exc:
+        session.rollback()
+        logger.error("Stage recommendation failed for %s: %s", symbol, exc)
+        return False, f"db error: {exc}", None

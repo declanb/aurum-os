@@ -65,7 +65,7 @@ export default function ApprovalsDashboard() {
         if (!activeTrade) return;
         setIsProcessing(true);
         try {
-            const result = await executeTrade(activeTrade.id);
+            const result = await executeTrade(activeTrade.id, { quoteEur: 2.0 });
             if (result && (result.ticket_status === "Filled" || result.trade_status === "Sent")) {
                 // Success
                 await loadPending();
@@ -76,11 +76,11 @@ export default function ApprovalsDashboard() {
                     await loadEvents(freshActive.id);
                 }
             } else {
-                alert(`Execution failed: ${result?.message || "Unknown error"}`);
+                alert(`Execution rejected by broker:\n\n${result?.execution?.message || result?.message || "Unknown error"}`);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Execution failed:", error);
-            alert("Execution failed. Check backend logs.");
+            alert(`Execution failed:\n\n${error?.message || String(error)}\n\nCheck backend logs for full traceback.`);
         } finally {
             setIsProcessing(false);
         }

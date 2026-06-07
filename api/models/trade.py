@@ -41,7 +41,15 @@ class ApprovalEvent(SQLModel, table=True):
 
 class ExecutionTicket(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    approval_event_id: int = Field(foreign_key="approvalevent.id", unique=True)
+    approval_event_id: Optional[int] = Field(default=None, foreign_key="approvalevent.id")
     adapter_status: str = Field(default="Pending")
     provider_response: Optional[str] = None
+    # Broker fill data — populated by polling after order placement
+    broker_order_id: Optional[str] = Field(default=None, index=True)
+    symbol: Optional[str] = None
+    side: Optional[str] = None  # "buy" | "sell"
+    fill_qty: Optional[float] = None  # Base-asset quantity actually filled
+    fill_price: Optional[float] = None  # Avg fill price (quote currency)
+    fees_eur: Optional[float] = None
+    filled_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

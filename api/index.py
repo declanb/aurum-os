@@ -7,6 +7,8 @@ from api.routers import journal
 from api.routers import revolut_x
 from api.routers import recommendations
 from api.routers import agent
+from api.routers import openai_balance
+from api.routers import cron
 
 app = FastAPI(
     title="AURUM OS API",
@@ -38,3 +40,5 @@ app.include_router(journal.router, prefix="/api")
 app.include_router(revolut_x.router, prefix="/api")
 app.include_router(recommendations.router, prefix="/api")
 app.include_router(agent.router, prefix="/api")
+app.include_router(openai_balance.router, prefix="/api")
+app.include_router(cron.router, prefix="/api")

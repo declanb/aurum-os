@@ -19,5 +19,15 @@
       "src": "/(.*)",
       "dest": "web/$1"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/scout",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/hunt",
+      "schedule": "*/2 * * * *"
+    }
   ]
 }
