@@ -74,3 +74,4 @@ This repository is structured for native deployment to Vercel via GitHub connect
 - All backend changes mapping to database schemas must use Alembic migrations.
 - UI elements prefer `shadcn/ui` using the dark-mode primary configuration.
 - The execution layer must always validate an \`ApprovalEvent\` before triggering broker adapters. Helm is wired to a live Revolut X account (real funds). Agents may recommend and stage a \`TradeIdea\` only. Path: TradeIdea → Approvals UI → human execute click → broker. Auto-approve is not auto-execute. Spot only — no shorts, leverage, or perps.
+- Revolut X spot cannot attach a stop or target. Helm exit brackets own those sells. See `docs/helm-exit-brackets.md`.

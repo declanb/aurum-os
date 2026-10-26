@@ -5,6 +5,12 @@ All notable changes to Aurum OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Helm exit brackets: hard stop, take-profit, and a 1R / 0.25R trailing ratchet for filled spot longs. Revolut X still has no native SL/TP. Live triggers become an `EXIT` idea that needs approval before a market sell. `PAPER_TRADING=1` simulates that sell. See `docs/helm-exit-brackets.md`.
+
 ## [1.0.0] - 2026-06-05
 
 ### 🎉 Initial Production Release

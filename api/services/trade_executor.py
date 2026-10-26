@@ -97,40 +97,81 @@ async def _paper_fill(
     }
 
 
+def paper_fill_from_result(result: dict) -> Optional[dict]:
+    """Normalise a paper execute_trade result. Returns None for live results."""
+    if not isinstance(result, dict):
+        return None
+    raw = result.get("raw") or {}
+    if not isinstance(raw, dict):
+        raw = {}
+    code = str(result.get("string_code") or "").upper()
+    if not (raw.get("paper") or code.startswith("PAPER")):
+        return None
+    state = str(raw.get("state") or code).upper()
+    filled = state == "PAPER_FILLED" or code == "PAPER_FILLED"
+    qty = raw.get("filled_quantity")
+    price = raw.get("avg_fill_price")
+    return {
+        "paper": True,
+        "filled": filled,
+        "adapter_status": "PaperFilled" if filled else "PaperOpen",
+        "fill_qty": float(qty) if qty else None,
+        "fill_price": float(price) if price else None,
+        "fees_eur": 0.0,
+        "state": state,
+        "error": None,
+    }
+
+
 async def execute_trade(
     symbol: str,
     direction: str,
     volume: float,
     entry_price: Optional[float] = None,
-    stop_loss: Optional[float] = None,  # noqa: ARG001  (no native SL/TP on spot)
-    take_profit: Optional[float] = None,  # noqa: ARG001
+    stop_loss: Optional[float] = None,
+    take_profit: Optional[float] = None,
     comment: str = "AURUM OS",
     *,
     post_only: bool = False,
     client_order_id: Optional[str] = None,
     quote_eur: Optional[float] = None,
+    side: Optional[str] = None,
 ) -> dict:
     """Place a spot order on Revolut X.
 
     Pass `quote_eur` to spend a fixed EUR amount (preferred for retail €-budget
     trading); otherwise `volume` is interpreted as base-asset quantity.
 
-    `stop_loss` and `take_profit` are accepted for API compatibility with the
-    legacy Vantage executor but are silently ignored — Revolut X spot does not
-    support attached protective orders. Use bracket logic in your strategy layer.
+    `stop_loss` and `take_profit` are accepted for API compatibility but are
+    not attached to the order. Revolut X spot has no native protective orders.
+    Helm exit brackets (api.services.exit_bracket) own those exits after a fill.
+
+    Pass `side="sell"` to close a spot long. Otherwise side is derived from
+    direction (LONG → buy, SHORT → sell).
 
     When settings.PAPER_TRADING is true, the order is simulated against live
     mid-price and no real broker call is made.
     """
-    side = _side_for(direction)
+    if stop_loss is not None or take_profit is not None:
+        logger.info(
+            "stop_loss=%s take_profit=%s are not attached on Revolut X spot; "
+            "ExitBracket owns protective exits for %s",
+            stop_loss, take_profit, symbol,
+        )
+    if side:
+        order_side = side.lower()
+        if order_side not in {"buy", "sell"}:
+            raise ValueError(f"Invalid side: {side}. Must be buy or sell.")
+    else:
+        order_side = _side_for(direction)
     is_market = not entry_price or entry_price == 0
     coid = client_order_id or comment
-    use_quote = quote_eur is not None and quote_eur > 0
+    use_quote = quote_eur is not None and quote_eur > 0 and order_side == "buy"
 
     # Paper-trading branch — simulate fill, never touch Revolut X
     if settings.PAPER_TRADING:
         order = await _paper_fill(
-            symbol=symbol, side=side, qty=volume,
+            symbol=symbol, side=order_side, qty=volume,
             limit_price=entry_price, is_market=is_market, client_order_id=coid,
         )
         state = order["state"]
@@ -148,7 +189,7 @@ async def execute_trade(
     try:
         place_kwargs = dict(
             symbol=symbol,
-            side=side,
+            side=order_side,
             limit_price=None if is_market else entry_price,
             market=is_market,
             post_only=post_only and not is_market,
@@ -290,6 +331,68 @@ async def poll_for_fill(
     }
 
 
+async def resolve_fill(result: dict) -> dict:
+    """Turn an execute_trade result into ticket fill fields.
+
+    Paper results stay local. Live results poll the broker. On a poll error
+    ``adapter_status`` is None so the caller can keep its provisional status.
+    """
+    paper = paper_fill_from_result(result)
+    if paper:
+        return paper
+    if not result.get("success") or not result.get("order_id"):
+        return {
+            "paper": False,
+            "filled": False,
+            "adapter_status": "Rejected",
+            "fill_qty": None,
+            "fill_price": None,
+            "fees_eur": None,
+            "state": result.get("string_code") or "REJECTED",
+            "error": None,
+        }
+    try:
+        polled = await poll_for_fill(result["order_id"])
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "paper": False,
+            "filled": False,
+            "adapter_status": None,
+            "fill_qty": None,
+            "fill_price": None,
+            "fees_eur": None,
+            "state": None,
+            "error": str(exc),
+        }
+    state = str(polled.get("state") or "").upper()
+    status_map = {
+        "FILLED": "Filled",
+        "PARTIALLY_FILLED": "PartiallyFilled",
+        "CANCELLED": "Cancelled",
+        "REJECTED": "Rejected",
+        "EXPIRED": "Expired",
+        "NEW": "Open",
+        "PENDING_NEW": "Open",
+        "OPEN": "Open",
+        "PENDING": "Open",
+        "ACCEPTED": "Open",
+    }
+    # Unrecognised / empty poll states leave adapter_status unset so the caller
+    # keeps the provisional status from order acceptance (same as before).
+    adapter = status_map.get(state) if state and state != "UNKNOWN" else None
+    return {
+        "paper": False,
+        "filled": state == "FILLED",
+        "adapter_status": adapter,
+        "fill_qty": polled.get("fill_qty") or None,
+        "fill_price": polled.get("fill_price") or None,
+        "fees_eur": polled.get("fees_eur"),
+        "state": state,
+        "error": None,
+        "poll": polled,
+    }
+
+
 async def get_positions() -> list[dict]:
     """Revolut X is spot \u2014 there are no positions, only balances.
 
@@ -383,7 +486,7 @@ async def modify_position(
         "numeric_code": 1,
         "message": (
             "Revolut X spot does not support modifying SL/TP on a held position. "
-            "Use the orders endpoint to replace a resting limit order, or implement "
-            "bracket logic in the strategy layer."
+            "Use the orders endpoint to replace a resting limit order. "
+            "Protective exits live on the Helm ExitBracket (stop, target, trail)."
         ),
     }

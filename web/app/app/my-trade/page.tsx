@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { fetchLivePositions } from "@/lib/api";
+import Link from "next/link";
+import { exitStatusLabel, fetchLivePositions, ExitBracketView } from "@/lib/api";
 
 // Asset → emoji map (cosmetic only — backend is source of truth for everything else)
 const ASSET_EMOJI: Record<string, string> = {
@@ -18,10 +19,6 @@ const ASSET_EMOJI: Record<string, string> = {
   DOGE: "🐶",
   ADA: "🔷",
 };
-
-// Default profit target — gain N% net of fees triggers the auto-sell
-const TARGET_PROFIT_PCT = 0.025; // 2.5%
-const TAKER_FEE = 0.0009;
 
 interface PositionView {
   symbol: string;
@@ -42,6 +39,7 @@ interface PositionView {
   staked: number;
   available: number;
   type?: string;
+  exit: ExitBracketView | null;
 }
 
 export default function MyTradeDashboard() {
@@ -66,13 +64,11 @@ export default function MyTradeDashboard() {
       const views: PositionView[] = data.positions.map((p) => {
         const entryPrice = p.entry_price ?? 0;
         const costEur = p.cost_eur ?? 0;
-        // Target bid that yields TARGET_PROFIT_PCT net P&L on costEur (when DB record exists)
-        let triggerBid: number | null = null;
+        const exit = p.exit ?? null;
+        let triggerBid: number | null = exit?.target_price ?? null;
         let distancePct: number | null = null;
-        if (costEur > 0 && p.qty > 0) {
-          const targetSaleNet = costEur * (1 + TARGET_PROFIT_PCT);
-          triggerBid = targetSaleNet / (p.qty * (1 - TAKER_FEE));
-          distancePct = p.bid > 0 ? ((triggerBid - p.bid) / p.bid) * 100 : null;
+        if (triggerBid && p.bid > 0) {
+          distancePct = ((triggerBid - p.bid) / p.bid) * 100;
         }
         return {
           symbol: p.symbol,
@@ -92,6 +88,7 @@ export default function MyTradeDashboard() {
           isStaked: p.is_staked,
           staked: p.staked,
           available: p.available,
+          exit,
         };
       });
 
@@ -253,17 +250,26 @@ export default function MyTradeDashboard() {
                 </div>
               </div>
 
-              {/* Progress to target — hide for staked positions (can't be sold) */}
-              {!pos.isStaked && pos.triggerBid && pos.distancePct !== null && (
+              {/* Helm bracket — stop, target, trail. Live sells wait for approval. */}
+              {!pos.isStaked && pos.exit && pos.triggerBid && pos.distancePct !== null && (
                 <div className="mb-4">
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-xs text-muted-foreground">🎯 Auto-sell at €{pos.triggerBid.toFixed(pos.triggerBid < 0.01 ? 8 : 2)}</span>
+                  <div className="flex justify-between items-center mb-1.5 gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Target €{pos.triggerBid.toFixed(pos.triggerBid < 0.01 ? 8 : 2)}
+                      {" · "}
+                      stop €{pos.exit.stop_price.toFixed(pos.exit.stop_price < 0.01 ? 8 : 2)}
+                      {pos.exit.trail_armed ? " · trailing" : ""}
+                    </span>
                     <span
                       className={`text-xs font-semibold tabular-nums ${
-                        pos.distancePct <= 0 ? "text-emerald-400" : "text-amber-400"
+                        pos.exit.status === "exit_proposed"
+                          ? "text-amber-400"
+                          : pos.distancePct <= 0
+                          ? "text-emerald-400"
+                          : "text-muted-foreground"
                       }`}
                     >
-                      {pos.distancePct <= 0 ? "READY" : `+${pos.distancePct.toFixed(2)}% to go`}
+                      {exitStatusLabel(pos.exit.status)}
                     </span>
                   </div>
                   <div className="relative w-full h-2 bg-muted rounded-full overflow-hidden">
@@ -277,9 +283,22 @@ export default function MyTradeDashboard() {
                     />
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Progress: {progressPct.toFixed(0)}% of way to target
+                    {progressPct.toFixed(0)}% from entry to target
+                    {pos.exit.status === "exit_proposed" && (
+                      <>
+                        {" · "}
+                        <Link href="/app/approvals" className="underline text-amber-400">
+                          Review exit
+                        </Link>
+                      </>
+                    )}
                   </p>
                 </div>
+              )}
+              {!pos.isStaked && !pos.exit && (
+                <p className="mb-4 text-[11px] text-muted-foreground">
+                  No Helm bracket armed. A live sell is not automatic.
+                </p>
               )}
 
               {/* Staked notice — replaces the progress bar */}

@@ -44,7 +44,7 @@ export async function createNote(data: Partial<MarketNote>): Promise<MarketNote 
 export type TradeIdea = {
     id: number;
     symbol: string;
-    direction: "LONG" | "SHORT";
+    direction: "LONG" | "SHORT" | "EXIT";
     entry_price: number;
     stop_price: number;
     target_price: number;
@@ -426,7 +426,61 @@ export type LivePosition = {
     pnl_pct: number | null;
     has_db_record: boolean;
     broker_order_id: string | null;
+    exit?: ExitBracketView | null;
 };
+
+export type ExitBracketView = {
+    id: number;
+    entry_ticket_id: number;
+    trade_idea_id: number;
+    exit_trade_idea_id: number | null;
+    exit_trade_status: string | null;
+    symbol: string;
+    direction: string;
+    qty: number;
+    entry_price: number;
+    initial_stop_price: number;
+    stop_price: number;
+    target_price: number;
+    high_water_price: number;
+    trail_armed: boolean;
+    status: string;
+    exit_reason: string | null;
+    last_price: number | null;
+    last_trigger: string | null;
+    pending_clear: boolean;
+};
+
+export type ExitBracketResponse = {
+    paper_trading: boolean;
+    live_exit: "approval_required" | "paper_auto";
+    rule: string;
+    count: number;
+    brackets: ExitBracketView[];
+};
+
+export function exitStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+        armed: "Armed",
+        exit_proposed: "Exit pending",
+        closing: "Closing",
+        paper_closed: "Paper closed",
+        closed: "Closed",
+        cancelled: "Cancelled",
+    };
+    return labels[status] || status;
+}
+
+export async function fetchExitBrackets(): Promise<ExitBracketResponse | null> {
+    try {
+        const res = await fetch(`${API_URL}/exits`);
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error("fetchExitBrackets failed:", error);
+        return null;
+    }
+}
 
 export type LivePositionsResponse = {
     cash_eur: number;

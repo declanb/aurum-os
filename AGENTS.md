@@ -79,14 +79,16 @@ curl http://localhost:8000/api/agent/status
 
 ### 2. profit_hunter_<symbol>
 
-**Purpose:** Exit strategy — sells position when profit target hit  
-**Process:** One per position, exits after fill  
-**Log:** `/tmp/profit_hunter_<symbol>.log`
+**Purpose:** Exit signal for one open long (hard stop, target, trail, or a euro floor)  
+**Process:** One per position. Live mode signals only; it does not place the sell.  
+**Log:** `/tmp/profit_hunter_<symbol>.log`  
+**Bracket rule:** `docs/helm-exit-brackets.md`
 
 **What it does:**
 - Polls bid price every N seconds
-- Computes net P&L (after fees)
-- When P&L >= target, fires market sell
+- Applies the Helm bracket when entry, stop, and target are passed
+- Live: logs the trigger and exits. The sell waits for an EXIT idea approval.
+- Paper (`PAPER_TRADING=1`): simulates the sell
 - Unregisters on exit (symbol freed for scout)
 
 **Start:**
@@ -95,7 +97,9 @@ python -m api.services.profit_hunter \
   --symbol BTC-EUR \
   --qty 0.00003443 \
   --cost-eur 2.00 \
-  --min-profit-eur 0.01 \
+  --entry-price 60000 \
+  --stop-price 58000 \
+  --target-price 65000 \
   --poll-secs 10
 ```
 
@@ -263,7 +267,7 @@ Vercel cron (scout and profit-hunter ticks) stops when `AURUM_AGENTS_ENABLED=fal
 
 ## Safety
 
-1. **No auto-execution** — scout only auto-approves TradeIdeas. You still manually click "Execute" to place the broker order.
+1. **No auto-execution** — scout only auto-approves TradeIdeas. Exit brackets propose a sell; you still approve and click Execute before a live broker order. Paper mode is the only path that simulates the exit fill.
 2. **Symbol collision prevention** — scout won't auto-approve a symbol that profit_hunter has already claimed.
 3. **Daily cap** — max 3 auto-approvals per 24h (rolling window).
 4. **Personal-edge filter** — only auto-approves symbols you've historically traded.
@@ -283,14 +287,11 @@ Vercel cron (scout and profit-hunter ticks) stops when `AURUM_AGENTS_ENABLED=fal
 
 3. **You review + execute** → `ExecutionTicket` created, order placed on Revolut X.
 
-4. **Start profit_hunter for that position**:
-   ```bash
-   python -m api.services.profit_hunter --symbol BTC-EUR --qty 0.00003443 --cost-eur 2.00 --min-profit-eur 0.01
-   ```
+4. **Helm bracket arms on the fill** (stop, target, trail). `/api/cron/hunt` watches it while agents are enabled. See `docs/helm-exit-brackets.md`.
 
-5. **profit_hunter claims the symbol** → scout won't auto-approve BTC again until hunter exits.
+5. **A breach creates an EXIT idea** → approve it, then execute. That market-sells the bracket quantity. Paper mode does this step itself.
 
-6. **profit_hunter hits target, sells, unregisters** → symbol freed, cycle repeats.
+6. **The symbol is free again** after the exit fill. Scout can consider it on the next pass.
 
 ## Monitoring
 

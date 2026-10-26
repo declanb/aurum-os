@@ -22,8 +22,14 @@ from sqlmodel import Session, select
 
 from api.core.config import settings
 from api.core.db import engine
-from api.models.trade import TradeIdea as Trade
+from api.models.trade import ExitBracket, TradeIdea as Trade
 from api.services import agent_registry, ai_advisor, auto_approver, revolut_x_client as rx
+from api.services.exit_bracket import (
+    ACTIVE_STATUSES,
+    ensure_brackets,
+    extract_bid,
+    monitor_brackets,
+)
 from api.services.personal_edge import compute_edge_fingerprint
 
 router = APIRouter(tags=["cron"])
@@ -195,125 +201,77 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
 @router.get("/cron/hunt")
 async def hunt_tick(authorization: Optional[str] = Header(None)):
     """
-    Profit Hunter — checks all open positions, sells when profit target hit.
-    
+    Helm exit monitor — hard stop, take-profit, and trailing ratchet.
+
+    Live mode creates a Ready-for-Approval EXIT idea. It does not place a
+    broker order. Paper mode (PAPER_TRADING=1) auto-approves and simulates
+    the sell. Still gated by AURUM_AGENTS_ENABLED.
+
     Triggered by Vercel cron every 2 minutes.
     Cost: ~$0.50/month Vercel compute (no LLM calls).
     """
     _verify_cron_secret(authorization)
-    
+
     # Global kill switch
     if not settings.AURUM_AGENTS_ENABLED:
         return {"status": "disabled", "reason": "AURUM_AGENTS_ENABLED=false"}
-    
+
+    # Same pause flag as scout. A paused fleet must not even propose exits.
+    if agent_registry.is_paused():
+        return {"status": "paused", "reason": "AURUM_AGENTS_PAUSED or registry pause"}
+
     # Rate limit
     if not _check_rate_limit("hunt", min_interval_seconds=110):  # 110s min
         return {"status": "skipped", "reason": "rate_limited"}
-    
-    logger.info("──── HUNT TICK (cron) ────")
-    
-    # Fetch open positions from DB
-    positions = []
+
+    logger.info("──── HUNT TICK (exit brackets) ────")
+
+    symbols: list[str] = []
     try:
         with Session(engine) as session:
-            positions = session.exec(
-                select(Trade).where(Trade.status == "open")
+            ensure_brackets(session)
+            session.commit()
+            rows = session.exec(
+                select(ExitBracket).where(ExitBracket.status.in_(ACTIVE_STATUSES))  # type: ignore[attr-defined]
             ).all()
+            symbols = sorted({row.symbol for row in rows if row.symbol})
     except Exception as exc:
-        logger.error(f"Failed to fetch positions: {exc}")
+        logger.error("Failed to list exit brackets: %s", exc)
         return {"status": "error", "reason": str(exc)}
-    
-    if not positions:
-        return {"status": "success", "positions_checked": 0, "positions_closed": 0}
-    
-    logger.info(f"Checking {len(positions)} open position(s)")
-    
-    closed_count = 0
-    closed_symbols = []
-    
-    for pos in positions:
-        symbol = pos.symbol
-        base = symbol.split("-")[0] if "-" in symbol else symbol.split("/")[0]
-        
-        # Get current bid
+
+    bids: dict[str, float] = {}
+    for symbol in symbols:
         try:
-            ticker = await rx.get_ticker(symbol)
-            if isinstance(ticker, list) and ticker:
-                t = ticker[0]
-            elif isinstance(ticker, dict) and "data" in ticker:
-                t = ticker["data"][0] if ticker["data"] else None
-            else:
-                t = ticker
-            
-            if not t:
-                logger.warning(f"  {symbol}: No ticker data")
-                continue
-            
-            bid = float(t.get("bid", 0))
-            if bid <= 0:
-                logger.warning(f"  {symbol}: Invalid bid={bid}")
-                continue
-            
-        except Exception as exc:
-            logger.warning(f"  {symbol}: Ticker fetch failed: {exc}")
+            bid = extract_bid(await rx.get_ticker(symbol))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("  %s: ticker fetch failed: %s", symbol, exc)
             continue
-        
-        # Compute P&L
-        TAKER_FEE = 0.0009
-        qty = float(pos.quantity or 0)
-        cost = float(pos.entry_price or 0) * qty
-        
-        sale_gross = qty * bid
-        sale_net = sale_gross * (1 - TAKER_FEE)
-        pnl = sale_net - cost
-        
-        target_profit = float(pos.target_profit or 0)
-        
-        logger.info(f"  {symbol}: bid=€{bid:.6f} P&L=€{pnl:+.4f} target=€{target_profit:+.4f}")
-        
-        # Check if profit target hit
-        if pnl >= target_profit:
-            logger.info(f"  {symbol}: 🚀 PROFIT THRESHOLD HIT — SELLING")
-            
-            try:
-                # Place market sell
-                result = await rx.place_order(
-                    symbol=symbol,
-                    side="sell",
-                    qty=qty,
-                    market=True,
-                )
-                
-                order = result.get("data") if isinstance(result, dict) and "data" in result else result
-                if isinstance(order, list) and order:
-                    order = order[0]
-                
-                order_id = order.get("venue_order_id") or order.get("id")
-                state = order.get("state")
-                
-                logger.info(f"  {symbol}: ✅ SELL ORDER {order_id} (state={state})")
-                
-                # Update position in DB
-                with Session(engine) as session:
-                    db_pos = session.get(Trade, pos.id)
-                    if db_pos:
-                        db_pos.status = "closed"
-                        db_pos.exit_price = bid
-                        db_pos.exit_time = datetime.now(timezone.utc)
-                        db_pos.realized_pnl = pnl
-                        session.add(db_pos)
-                        session.commit()
-                
-                closed_count += 1
-                closed_symbols.append(symbol)
-                
-            except Exception as exc:
-                logger.error(f"  {symbol}: SELL FAILED: {exc}")
-    
+        if bid is None:
+            logger.warning("  %s: no bid", symbol)
+            continue
+        bids[symbol] = bid
+
+    try:
+        with Session(engine) as session:
+            summary = await monitor_brackets(
+                session,
+                bids,
+                paper=settings.PAPER_TRADING,
+            )
+    except Exception as exc:
+        logger.error("Exit monitor failed: %s", exc)
+        return {"status": "error", "reason": str(exc)}
+
+    logger.info(
+        "Hunt mode=%s checked=%s proposed=%s paper_closed=%s broker_orders=%s",
+        summary["mode"],
+        summary["checked"],
+        len(summary["proposed"]),
+        len(summary["paper_closed"]),
+        summary["broker_orders_placed"],
+    )
     return {
         "status": "success",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "positions_checked": len(positions),
-        "positions_closed": closed_count,
-        "closed_symbols": closed_symbols,
+        **summary,
     }

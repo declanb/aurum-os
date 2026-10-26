@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fetchTrades, TradeIdea } from "@/lib/api";
+import { exitStatusLabel, fetchExitBrackets, fetchTrades, ExitBracketView, TradeIdea } from "@/lib/api";
 import { Clock, CheckCircle2, AlertCircle } from "lucide-react";
 
 type Tab = "open" | "pending" | "history";
@@ -15,14 +15,16 @@ interface PositionsTableProps {
 export function PositionsTable({ refreshKey }: PositionsTableProps) {
   const [tab, setTab] = useState<Tab>("pending");
   const [trades, setTrades] = useState<TradeIdea[]>([]);
+  const [brackets, setBrackets] = useState<ExitBracketView[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const data = await fetchTrades();
+        const [data, exits] = await Promise.all([fetchTrades(), fetchExitBrackets()]);
         setTrades(data);
+        setBrackets(exits?.brackets ?? []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -100,6 +102,7 @@ export function PositionsTable({ refreshKey }: PositionsTableProps) {
                 <th className="text-right px-4 py-2">TP</th>
                 <th className="text-right px-4 py-2">R:R</th>
                 <th className="text-left px-4 py-2">Status</th>
+                <th className="text-left px-4 py-2">Exit</th>
                 <th className="text-right px-4 py-2">Created</th>
               </tr>
             </thead>
@@ -108,11 +111,14 @@ export function PositionsTable({ refreshKey }: PositionsTableProps) {
                 const risk = Math.abs(t.entry_price - t.stop_price);
                 const reward = Math.abs(t.target_price - t.entry_price);
                 const rr = risk > 0 ? (reward / risk).toFixed(2) : "—";
+                const bracket = brackets.find(
+                  (b) => b.trade_idea_id === t.id || b.exit_trade_idea_id === t.id,
+                );
                 return (
                   <tr key={t.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
                     <td className="px-4 py-2.5 font-semibold text-foreground">{t.symbol}</td>
                     <td className="px-4 py-2.5">
-                      <span className={`font-bold text-xs ${t.direction === "LONG" ? "text-emerald-500" : "text-red-500"}`}>
+                      <span className={`font-bold text-xs ${t.direction === "LONG" ? "text-emerald-500" : t.direction === "EXIT" ? "text-amber-500" : "text-red-500"}`}>
                         {t.direction}
                       </span>
                     </td>
@@ -121,6 +127,22 @@ export function PositionsTable({ refreshKey }: PositionsTableProps) {
                     <td className="px-4 py-2.5 text-right font-mono text-emerald-500/80">{t.target_price.toFixed(2)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-foreground">1:{rr}</td>
                     <td className="px-4 py-2.5">{statusBadge(t.status)}</td>
+                    <td className="px-4 py-2.5">
+                      {bracket ? (
+                        <span>
+                          <span className="font-semibold text-foreground">
+                            {exitStatusLabel(bracket.status)}
+                            {bracket.trail_armed ? " · trail" : ""}
+                          </span>
+                          <span className="block text-[10px] text-muted-foreground font-mono">
+                            stop {bracket.stop_price} → {bracket.target_price}
+                            {bracket.exit_reason ? ` · ${bracket.exit_reason}` : ""}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-right text-muted-foreground">
                       {new Date(t.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </td>

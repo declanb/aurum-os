@@ -1,27 +1,25 @@
 """
-Profit Hunter Agent — autonomous monitor that sells a held position
-the moment it crosses a configurable profit threshold.
+Profit Hunter Agent — local poller for a held spot position.
 
-Default: sells BTC-EUR when net P&L (after both buy + sell fees) ≥ €0.00.
+The durable exit path is the Helm bracket monitor (`/api/cron/hunt` and
+`api.services.exit_bracket`). This CLI is the same idea for one position:
+
+  1. Polls Revolut X for the live bid.
+  2. When --entry-price, --stop-price, and --target-price are set, applies the
+     Helm ratchet (hard stop, take-profit, trailing stop).
+  3. Otherwise watches the legacy euro profit floor.
+  4. Live mode logs the signal and does NOT place a broker order. Approve the
+     EXIT idea, then execute it. Paper mode (PAPER_TRADING=1) simulates the sell.
 
 Usage:
     python -m api.services.profit_hunter \
         --symbol BTC-EUR \
         --qty 0.00003443 \
         --cost-eur 2.00 \
-        --min-profit-eur 0.01 \
+        --entry-price 60000 \
+        --stop-price 58000 \
+        --target-price 65000 \
         --poll-secs 5
-
-The agent:
-  1. Polls Revolut X for the live bid price every N seconds.
-  2. Computes net P&L = (qty * bid * (1 - taker_fee)) - cost_eur.
-  3. When P&L >= min_profit_eur, fires a market sell.
-  4. Logs everything to stdout. Exits after fill (or on Ctrl+C).
-
-Safety:
-  * Hard exit if fill price would slip > MAX_SLIPPAGE_PCT vs polled bid.
-  * Single position only — no averaging, no DCA.
-  * Refuses to sell more qty than you actually hold.
 """
 
 from __future__ import annotations
@@ -35,8 +33,11 @@ import sys
 from datetime import datetime, timezone
 from typing import Optional
 
+from api.core.config import settings
 from api.services import revolut_x_client as rx
 from api.services import agent_registry
+from api.services import trade_executor
+from api.services.exit_bracket import evaluate_long_bracket
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,7 +47,6 @@ logging.basicConfig(
 logger = logging.getLogger("profit_hunter")
 
 TAKER_FEE_PCT = 0.0009  # 0.09% Revolut X taker fee
-MAX_SLIPPAGE_PCT = 0.005  # refuse if order would fill > 0.5% off our reading
 
 
 def _now() -> str:
@@ -120,6 +120,9 @@ async def hunt(
     min_profit_eur: float = 0.01,
     poll_secs: float = 5.0,
     max_runtime_secs: int = 86400,
+    entry_price: Optional[float] = None,
+    stop_price: Optional[float] = None,
+    target_price: Optional[float] = None,
 ) -> dict:
     """Main agent loop. Returns the fill record on success."""
     base = symbol.split("-")[0]
@@ -160,6 +163,11 @@ async def hunt(
     poll_count = 0
     best_bid_seen = 0.0
     heartbeat_counter = 0
+    use_bracket = (
+        entry_price is not None and stop_price is not None and target_price is not None
+    )
+    trail_stop = float(stop_price) if stop_price is not None else None
+    trail_high = float(entry_price) if entry_price is not None else 0.0
 
     try:
         while elapsed < max_runtime_secs:
@@ -195,13 +203,32 @@ async def hunt(
                 f"high=€{best_bid_seen:,.2f}"
             )
 
-            # TRIGGER
-            if pnl >= min_profit_eur:
-                logger.info("")
-                logger.info("🚀 PROFIT THRESHOLD HIT — FIRING SELL ORDER")
-                logger.info(f"   Threshold:  €{min_profit_eur:+.4f}")
-                logger.info(f"   Current:    €{pnl:+.4f}")
+            # TRIGGER — bracket levels outrank the euro profit floor.
+            trigger = None
+            if use_bracket and trail_stop is not None and entry_price is not None and stop_price is not None and target_price is not None:
+                view = evaluate_long_bracket(
+                    entry_price=float(entry_price),
+                    initial_stop=float(stop_price),
+                    stop_price=trail_stop,
+                    target_price=float(target_price),
+                    high_water=trail_high,
+                    bid=bid,
+                )
+                trail_stop = view.stop_price
+                trail_high = view.high_water_price
+                if view.action != "hold":
+                    trigger = view.action
+                    logger.info(
+                        "Bracket %s bid=%s stop=%s trail=%s",
+                        view.action, bid, view.stop_price, view.trail_armed,
+                    )
+            if trigger is None and pnl >= min_profit_eur:
+                trigger = "profit_floor"
+                logger.info("Profit floor hit: €%+.4f (threshold €%+.4f)", pnl, min_profit_eur)
+
+            if trigger:
                 result = await _execute_sell(symbol, qty, expected_bid=bid)
+                result["trigger"] = trigger
                 agent_registry.unregister(agent_id)
                 return result
 
@@ -215,63 +242,57 @@ async def hunt(
 
 
 async def _execute_sell(symbol: str, qty: float, expected_bid: float) -> dict:
-    """Fire a market sell with slippage protection."""
+    """Signal a spot sell. Live broker orders are not placed from this agent.
+
+    Paper mode simulates the fill through trade_executor. Live mode returns
+    ``hitl_required`` so a human ApprovalEvent stays in front of the broker.
+    """
+    base = symbol.split("-")[0]
+    if not settings.PAPER_TRADING:
+        logger.warning(
+            "HITL exit signal for %s qty=%s bid=%s — live sell not sent. "
+            "Approve the EXIT idea, then execute from Approvals.",
+            symbol, qty, expected_bid,
+        )
+        _notify_macos(
+            title=f"Helm: exit signal {base}",
+            message="Live sell needs approval. No broker order was sent.",
+        )
+        return {
+            "success": False,
+            "reason": "hitl_required",
+            "expected_bid": expected_bid,
+            "symbol": symbol,
+            "qty": qty,
+        }
+
     try:
-        # Place market sell via revx CLI
-        result = await rx.place_order(
+        result = await trade_executor.execute_trade(
             symbol=symbol,
+            direction="LONG",
             side="sell",
-            qty=qty,
-            market=True,
+            volume=qty,
+            comment=f"PAPER-HUNT-{base}",
+            client_order_id=f"PAPER-HUNT-{base}",
         )
-        order = result["data"] if isinstance(result, dict) and "data" in result else result
-        if isinstance(order, list) and order:
-            order = order[0]
-
-        logger.info("")
-        logger.info("✅ SELL ORDER PLACED")
-        logger.info(json.dumps(order, indent=2))
-
-        base = symbol.split("-")[0]
-        # Initial "order placed" notification — fires immediately regardless of fill
+        logger.info("Paper sell result: %s", json.dumps(result, default=str))
+        raw = result.get("raw") or {}
+        fill_price = raw.get("avg_fill_price") or expected_bid
+        filled_qty = raw.get("filled_quantity") or qty
         _notify_macos(
-            title=f"Helm: Sell placed for {base}",
-            message=f"Market sell {qty} {base} @ ~€{expected_bid:,.4f}",
+            title=f"Helm: paper sell {base}",
+            message=f"Simulated {filled_qty} {base} @ {fill_price}",
         )
-
-        # Fetch full order details for P&L
-        order_id = order.get("venue_order_id") or order.get("id")
-        if order_id:
-            await asyncio.sleep(1)
-            details = await rx.get_order(order_id)
-            d = details.get("data") if isinstance(details, dict) else details
-            if d:
-                fill_price = float(d.get("average_fill_price", 0))
-                filled_qty = float(d.get("filled_quantity", 0))
-                slippage_pct = ((fill_price - expected_bid) / expected_bid) * 100
-                logger.info("")
-                logger.info("📈 FILL DETAILS:")
-                logger.info(f"   Filled qty:     {filled_qty} {base}")
-                logger.info(f"   Avg fill price: €{fill_price:,.2f}")
-                logger.info(f"   Expected bid:   €{expected_bid:,.2f}")
-                logger.info(f"   Slippage:       {slippage_pct:+.3f}%")
-                # Filled notification with real numbers
-                _notify_macos(
-                    title=f"Helm: ✅ {base} sold @ €{fill_price:,.4f}",
-                    message=f"Filled {filled_qty} {base} · slippage {slippage_pct:+.2f}%",
-                )
-                return {"success": True, "order": d, "fill_price": fill_price, "filled_qty": filled_qty}
-
-        return {"success": True, "order": order}
-
+        return {
+            "success": bool(result.get("success")),
+            "order": result,
+            "fill_price": fill_price,
+            "filled_qty": filled_qty,
+            "paper": True,
+        }
     except Exception as exc:
-        logger.error(f"❌ Sell failed: {exc}")
-        _notify_macos(
-            title=f"Helm: ❌ Sell FAILED for {symbol.split('-')[0]}",
-            message=str(exc)[:200],
-            sound="Basso",
-        )
-        return {"success": False, "reason": str(exc)}
+        logger.error("Paper sell failed: %s", exc)
+        return {"success": False, "reason": str(exc), "paper": True}
 
 
 def main() -> None:
@@ -279,7 +300,10 @@ def main() -> None:
     parser.add_argument("--symbol", default="BTC-EUR", help="Trading pair (default: BTC-EUR)")
     parser.add_argument("--qty", type=float, required=True, help="Quantity of base currency to sell")
     parser.add_argument("--cost-eur", type=float, required=True, help="Original purchase cost in EUR")
-    parser.add_argument("--min-profit-eur", type=float, default=0.01, help="Minimum profit before selling (default: €0.01)")
+    parser.add_argument("--min-profit-eur", type=float, default=0.01, help="Legacy euro profit floor (default: €0.01)")
+    parser.add_argument("--entry-price", type=float, default=None, help="Fill price used as R for the trailing ratchet")
+    parser.add_argument("--stop-price", type=float, default=None, help="Hard stop from the approved idea")
+    parser.add_argument("--target-price", type=float, default=None, help="Take-profit from the approved idea")
     parser.add_argument("--poll-secs", type=float, default=5.0, help="Poll interval seconds (default: 5)")
     parser.add_argument("--max-runtime-secs", type=int, default=86400, help="Max runtime (default: 24h)")
     args = parser.parse_args()
@@ -298,15 +322,19 @@ def main() -> None:
         min_profit_eur=args.min_profit_eur,
         poll_secs=args.poll_secs,
         max_runtime_secs=args.max_runtime_secs,
+        entry_price=args.entry_price,
+        stop_price=args.stop_price,
+        target_price=args.target_price,
     ))
 
     if result.get("success"):
-        logger.info("")
-        logger.info("🎉 AGENT COMPLETE — Position closed at profit")
+        logger.info("Paper exit filled.")
         sys.exit(0)
-    else:
-        logger.warning(f"⚠️  Agent exited without selling: {result.get('reason')}")
-        sys.exit(1)
+    if result.get("reason") == "hitl_required":
+        logger.warning("Exit signal only. No live broker order was sent.")
+        sys.exit(0)
+    logger.warning("Agent exited without selling: %s", result.get("reason"))
+    sys.exit(1)
 
 
 if __name__ == "__main__":
