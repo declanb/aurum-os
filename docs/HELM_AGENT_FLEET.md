@@ -137,8 +137,16 @@ python -m api.services.trend_scout --symbols BTC-EUR --network
 
 Scout logs one line when the flag is on, then uses the same `ai_advisor` call it already makes. There is no second order path.
 
+## Copilot trend expert and regime context
+
+These sit beside `trend_scout`. They do not replace SignalBundles and they do not place orders.
+
+- `.github/agents/revolut-x-trend-expert.agent.md` — user-invocable Copilot agent. Tools are read, search, and web. Advisory read only. It does not edit the repo.
+- `api/services/trend_context.py` — `AURUM_TREND_CONTEXT` (default off). Public regime numbers (CoinGecko global, Fear & Greed, headlines, optional X GET) stamped as `trend_regime` / `trend_sources`. Missing numbers are omitted. `GET /api/recommendations/?include_trends=true` requests that read for one call.
+
+Trading Guru stays advisory-only.
+
 ## Out of scope for this slice
 
 - `structure_scout`
-- A Copilot custom agent that scours trends (tracked on issue #1). Trading Guru stays as it is.
 - Any change to execute, cancel, or profit-hunter sell behaviour.

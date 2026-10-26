@@ -53,6 +53,15 @@ class Settings(BaseSettings):
     AURUM_TREND_SCOUT_NETWORK: bool = False
     X_BEARER_TOKEN: str = ""
 
+    # ── Public regime context (read-only; advisory prompt input) ─────────────
+    # Separate from trend_scout. When set, ai_advisor loads CoinGecko / Fear &
+    # Greed / headlines (and X recent search if X_BEARER_TOKEN is set) and
+    # attaches them to the prompt. This flag does not place orders.
+    # Recommendations still end at a TradeIdea.
+    # trend_context.py reads the bearer from the environment and must not log it.
+    AURUM_TREND_CONTEXT: bool = False
+    X_TREND_QUERY: str = "(bitcoin OR ethereum OR solana) lang:en -is:retweet"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
