@@ -6,9 +6,17 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     GITHUB_TOKEN: str = ""  # GitHub PAT for Models API (free with Copilot Enterprise)
 
-    # Revolut X — credentials live at ~/.config/revolut-x/ (managed by `revx configure`).
-    # The `revx` CLI must be installed on PATH (`npm link -w cli` from revolut-x-api repo).
+    # Revolut X. Local CLI: `revx` on PATH plus ~/.config/revolut-x/ (`revx configure`).
+    # Vercel has no CLI. Set REVX_API_KEY and REVX_PRIVATE_KEY (PEM or base64) to
+    # sign REST calls. REVX_TRANSPORT=auto uses HTTP when both are set, else the CLI.
+    # REVOLUT_X_API_KEY is accepted as an alias of REVX_API_KEY. Never log these.
     REVOLUT_X_DEFAULT_PAIR: str = "BTC-EUR"
+    REVX_API_KEY: str = ""
+    REVOLUT_X_API_KEY: str = ""
+    REVX_PRIVATE_KEY: str = ""
+    REVX_PRIVATE_KEY_B64: str = ""
+    REVX_API_BASE_URL: str = "https://revx.revolut.com"
+    REVX_TRANSPORT: str = "auto"
 
     # ── Paper trading ────────────────────────────────────────────────────────
     # When PAPER_TRADING=1, trade_executor simulates fills against live mid-prices

@@ -23,8 +23,24 @@ After deploy, go to **Vercel Dashboard → Settings → Environment Variables** 
 ```
 DATABASE_URL=postgresql://<user>:<password>@<host>:5432/postgres?sslmode=require
 OPENAI_API_KEY=sk-proj-...            # your real key (set in Vercel env, never commit)
-REVOLUT_X_API_KEY=<your-revolut-x-api-key>   # set in Vercel env, never commit
 ```
+
+### Revolut X on Vercel (signed HTTP)
+
+The Python function cannot shell out to `revx`. Broker reads (`/api/revolut-x/*`) use the REST API when these secrets are set. Do not bundle the CLI. Do not paste real keys into git.
+
+Set on **Vercel → Settings → Environment Variables** (Production):
+
+```
+REVX_API_KEY=<64-char key from Revolut X → Profile → API keys>
+REVX_PRIVATE_KEY=<Ed25519 PKCS#8 PEM; one line with literal \n between lines>
+```
+
+`REVOLUT_X_API_KEY` is accepted as an alias of `REVX_API_KEY` and is not enough on its own. Alternatively set `REVX_PRIVATE_KEY_B64` to the base64 of that PEM, of the PKCS#8 DER, or of the raw 32-byte seed, and leave `REVX_PRIVATE_KEY` empty.
+
+`REVX_TRANSPORT=auto` (default) uses HTTP when both values are present, and falls back to `revx` on a machine where the binary is on PATH and the env keys are unset. Optional: `REVX_API_BASE_URL=https://revx.revolut.com`.
+
+Order placement still requires an Approved `TradeIdea` and an `ApprovalEvent` before `POST /api/revolut-x/execute/{trade_id}`. This checklist does not turn on `AURUM_AGENTS_ENABLED`.
 
 ### Agent Control
 ```

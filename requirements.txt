@@ -9,5 +9,7 @@ psycopg2-binary>=2.9.9
 # imports this module. The binary extra ships libpq wheels for Vercel.
 psycopg[binary]>=3.2.0
 httpx>=0.27.0
+# Ed25519 request signing for the Revolut X HTTP API (Vercel has no `revx` CLI).
+cryptography>=42.0.0
 openai>=1.0.0
 openai-agents>=0.24.0

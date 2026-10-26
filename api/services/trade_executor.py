@@ -1,6 +1,6 @@
 """
 Trade execution service \u2014 places, cancels, and inspects orders on the
-Revolut X spot exchange via the `revx` CLI wrapper.
+Revolut X spot exchange via revolut_x_client (signed HTTP API, or the `revx` CLI).
 
 Direction semantics:
   LONG  \u2192 buy   base currency (BTC in BTC-USD)
@@ -171,7 +171,8 @@ async def execute_trade(
 
     order = result[0] if isinstance(result, list) and result else (result if isinstance(result, dict) else {})
     state = (order.get("state") or order.get("status") or "").upper()
-    success = state in {"NEW", "PARTIALLY_FILLED", "FILLED", "PENDING", "ACCEPTED", "OPEN"}
+    # pending_new is the exchange's "accepted, not yet on the book" state.
+    success = state in {"NEW", "PENDING_NEW", "PARTIALLY_FILLED", "FILLED", "PENDING", "ACCEPTED", "OPEN"}
 
     logger.info(
         "Revolut X order placed: %s %s %s qty=%s state=%s id=%s",
@@ -356,7 +357,7 @@ async def close_position(position_id: str) -> dict:
 
     order = result[0] if isinstance(result, list) and result else (result if isinstance(result, dict) else {})
     state = (order.get("state") or order.get("status") or "").upper()
-    success = state in {"NEW", "PARTIALLY_FILLED", "FILLED", "PENDING", "ACCEPTED"}
+    success = state in {"NEW", "PENDING_NEW", "PARTIALLY_FILLED", "FILLED", "PENDING", "ACCEPTED"}
     logger.info("Closed spot balance %s qty=%s state=%s", position_id, available, state)
     return {
         "success": success,
