@@ -79,7 +79,7 @@ export default function ExchangePage() {
   }, [selected, session]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-background -m-6 lg:-m-8">
+    <div className="flex flex-col min-w-0 bg-background -mx-4 -mt-4 md:-mx-6 md:-mt-6 lg:-mx-8 lg:-mt-8 lg:-mb-8 lg:h-[calc(100dvh-4rem)]">
       <SymbolHeader
         symbol={selectedSymbol}
         price={midPrice}
@@ -89,28 +89,36 @@ export default function ExchangePage() {
         volume24h={0}
       />
 
-      <div className="px-4 py-1 border-b border-border text-[11px] text-muted-foreground flex items-center gap-3">
+      <div className="px-4 py-2 border-b border-border text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-emerald-500 font-semibold">● LIVE</span>
         <span>Revolut X · {balance > 0 ? `${balanceCcy} ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available` : "loading account…"}</span>
       </div>
 
-      <div className="flex-1 grid grid-cols-[220px_240px_1fr_320px] min-h-0">
-        <MarketList selectedSymbol={selectedSymbol} onSelect={setSelectedSymbol} tickers={tickers} />
-        <OrderBook symbol={selectedSymbol} midPrice={midPrice || 1} />
-        <div className="flex flex-col min-w-0 border-r border-border">
-          <div className="flex-1 min-h-0">
-            <PriceChart symbol={selectedSymbol} midPrice={midPrice || 1} />
-          </div>
-          <div className="h-72 border-t border-border">
-            <PositionsTable refreshKey={refreshKey} />
-          </div>
+      <div className="lg:hidden border-b border-border">
+        <MarketList variant="strip" selectedSymbol={selectedSymbol} onSelect={setSelectedSymbol} tickers={tickers} />
+      </div>
+
+      <div className="flex flex-col lg:grid lg:grid-cols-[220px_240px_minmax(0,1fr)_320px] lg:grid-rows-[minmax(0,1fr)_18rem] lg:flex-1 lg:min-h-0">
+        <div className="hidden lg:block lg:row-span-2 lg:h-full min-h-0 overflow-hidden">
+          <MarketList selectedSymbol={selectedSymbol} onSelect={setSelectedSymbol} tickers={tickers} />
         </div>
-        <TradePanel
-          symbol={selectedSymbol}
-          midPrice={midPrice || 1}
-          availableBalance={balance}
-          onTradeStaged={() => setRefreshKey((k) => k + 1)}
-        />
+        <div className="order-4 lg:order-0 lg:row-span-2 h-80 lg:h-full min-h-0 overflow-hidden border-t lg:border-t-0">
+          <OrderBook symbol={selectedSymbol} midPrice={midPrice || 1} />
+        </div>
+        <div className="order-1 lg:order-0 h-64 sm:h-80 lg:h-full min-h-0 min-w-0">
+          <PriceChart symbol={selectedSymbol} midPrice={midPrice || 1} />
+        </div>
+        <div className="order-2 lg:order-0 lg:row-span-2 lg:h-full min-h-0 min-w-0">
+          <TradePanel
+            symbol={selectedSymbol}
+            midPrice={midPrice || 1}
+            availableBalance={balance}
+            onTradeStaged={() => setRefreshKey((k) => k + 1)}
+          />
+        </div>
+        <div className="order-3 lg:order-0 lg:h-full min-h-0 min-w-0 overflow-hidden border-t border-border">
+          <PositionsTable refreshKey={refreshKey} />
+        </div>
       </div>
     </div>
   );

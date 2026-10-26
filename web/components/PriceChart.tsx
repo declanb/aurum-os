@@ -64,22 +64,21 @@ export function PriceChart({ symbol, midPrice }: PriceChartProps) {
   const decimals = midPrice < 1 ? 5 : midPrice < 100 ? 3 : 2;
 
   return (
-    <div className="flex flex-col h-full bg-card">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <div className="flex gap-1">
-          {TIMEFRAMES.map((tf) => (
-            <button
-              key={tf.value}
-              onClick={() => setTimeframe(tf.value)}
-              className={`px-2.5 py-1 text-xs font-mono rounded transition-colors ${
-                timeframe === tf.value ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50"
-              }`}
-            >
-              {tf.label}
-            </button>
-          ))}
-        </div>
-        <div className="text-[10px] text-emerald-500 uppercase tracking-wider font-semibold">● Revolut X Live</div>
+    <div className="flex flex-col h-full min-h-0 min-w-0 bg-card">
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border overflow-x-auto overscroll-x-contain min-w-0">
+        {TIMEFRAMES.map((tf) => (
+          <button
+            key={tf.value}
+            type="button"
+            onClick={() => setTimeframe(tf.value)}
+            className={`shrink-0 min-h-11 px-3 text-sm font-mono rounded transition-colors ${
+              timeframe === tf.value ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50"
+            }`}
+          >
+            {tf.label}
+          </button>
+        ))}
+        <div className="ml-auto shrink-0 hidden sm:block pr-2 text-[10px] text-emerald-500 uppercase tracking-wider font-semibold">● Revolut X Live</div>
       </div>
 
       <div className="flex-1 relative overflow-hidden">

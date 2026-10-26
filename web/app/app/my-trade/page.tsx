@@ -135,23 +135,24 @@ export default function MyTradeDashboard() {
   const unmatchedCount = positions.filter((p) => !p.hasDbRecord).length;
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6 min-w-0">
       {/* HERO — total account + P&L */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-linear-to-br from-background to-muted/40 p-8">
-        <div className="absolute top-4 right-6 text-xs text-muted-foreground font-mono">
-          {lastUpdated ? `live · ${lastUpdated.toLocaleTimeString()}` : "loading…"}
-        </div>
-
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-linear-to-br from-background to-muted/40 p-5 sm:p-8">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
           {/* LEFT: Total + P&L */}
-          <div>
-            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Total Account</p>
-            <div className="flex items-baseline gap-3">
-              <h1 className="text-6xl md:text-7xl font-bold tracking-tight tabular-nums">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">Total Account</p>
+              <p className="text-xs text-muted-foreground font-mono">
+                {lastUpdated ? `live · ${lastUpdated.toLocaleTimeString()}` : "loading…"}
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+              <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight tabular-nums">
                 €{totalAccount.toFixed(2)}
               </h1>
               <span
-                className={`text-2xl font-bold tabular-nums ${
+                className={`text-xl sm:text-2xl font-bold tabular-nums ${
                   isProfitable
                     ? "text-emerald-500"
                     : isFlat
@@ -170,15 +171,15 @@ export default function MyTradeDashboard() {
           </div>
 
           {/* RIGHT: Cash + Invested breakdown */}
-          <div className="flex gap-6">
+          <div className="flex gap-6 justify-between sm:justify-start">
             <div className="text-right">
               <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Cash</p>
-              <p className="text-2xl font-semibold tabular-nums text-emerald-400">€{cashEur.toFixed(2)}</p>
+              <p className="text-xl sm:text-2xl font-semibold tabular-nums text-emerald-400">€{cashEur.toFixed(2)}</p>
             </div>
             <div className="w-px bg-border" />
             <div className="text-right">
               <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Invested</p>
-              <p className="text-2xl font-semibold tabular-nums">€{totalValue.toFixed(2)}</p>
+              <p className="text-xl sm:text-2xl font-semibold tabular-nums">€{totalValue.toFixed(2)}</p>
             </div>
           </div>
         </div>
@@ -199,7 +200,7 @@ export default function MyTradeDashboard() {
           return (
             <Card
               key={pos.symbol}
-              className={`p-5 transition-all hover:scale-[1.01] ${
+              className={`p-4 sm:p-5 transition-all md:hover:scale-[1.01] min-w-0 ${
                 pos.isStaked
                   ? "border-violet-500/30 bg-violet-500/2"
                   : posIsProfitable
@@ -237,7 +238,7 @@ export default function MyTradeDashboard() {
               {/* Hero P&L for this position */}
               <div className="mb-4">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Position value</p>
-                <div className="flex items-baseline gap-2">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <span className="text-2xl font-bold tabular-nums">€{pos.currentValue.toFixed(2)}</span>
                   <span
                     className={`text-sm font-semibold tabular-nums ${
@@ -253,8 +254,8 @@ export default function MyTradeDashboard() {
               {/* Helm bracket — stop, target, trail. Live sells wait for approval. */}
               {!pos.isStaked && pos.exit && pos.triggerBid && pos.distancePct !== null && (
                 <div className="mb-4">
-                  <div className="flex justify-between items-center mb-1.5 gap-2">
-                    <span className="text-xs text-muted-foreground">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-center mb-1.5">
+                    <span className="text-xs text-muted-foreground break-words">
                       Target €{pos.triggerBid.toFixed(pos.triggerBid < 0.01 ? 8 : 2)}
                       {" · "}
                       stop €{pos.exit.stop_price.toFixed(pos.exit.stop_price < 0.01 ? 8 : 2)}

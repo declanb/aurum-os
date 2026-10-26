@@ -14,7 +14,7 @@ export function SymbolHeader({ symbol, price, change24h, high24h, low24h, volume
   const changeAbs = (price * change24h) / 100;
 
   return (
-    <div className="flex items-center gap-8 px-4 py-3 bg-card border-b border-border overflow-x-auto">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 bg-card border-b border-border">
       <div className="flex items-center gap-3 shrink-0">
         <div>
           <h1 className="text-base font-bold text-foreground">{symbol}</h1>

@@ -82,9 +82,9 @@ export function AiRecommendations({ onTradeCreated }: AiRecommendationsProps) {
   };
 
   return (
-    <Card className="p-6 bg-linear-to-br from-card via-card to-primary/5 border-primary/20">
+    <Card className="p-4 sm:p-6 bg-linear-to-br from-card via-card to-primary/5 border-primary/20 min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
             <Sparkles className="w-5 h-5 text-primary" />
@@ -101,7 +101,7 @@ export function AiRecommendations({ onTradeCreated }: AiRecommendationsProps) {
           size="sm"
           onClick={loadRecommendations}
           disabled={loading}
-          className="gap-2"
+          className="gap-2 w-full sm:w-auto"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           Refresh
@@ -125,7 +125,7 @@ export function AiRecommendations({ onTradeCreated }: AiRecommendationsProps) {
                   key={pb.id}
                   onClick={() => setSelectedPlaybook(pb.id)}
                   disabled={loading}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                  className={`min-h-11 px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
                     active
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-card border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
@@ -213,9 +213,9 @@ function RecommendationCard({ recommendation: rec, onExecute }: RecommendationCa
     rec.confidence_score >= 60 ? "text-yellow-500" : "text-orange-500";
 
   return (
-    <div className={`p-4 rounded-xl border-2 ${directionBorder} ${directionBg} transition-all hover:scale-[1.02]`}>
+    <div className={`p-4 rounded-xl border-2 ${directionBorder} ${directionBg} transition-all md:hover:scale-[1.02] min-w-0`}>
       {/* Header Row */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
           {isLong ? (
             <TrendingUp className={`w-6 h-6 ${directionColor}`} />
@@ -272,33 +272,33 @@ function RecommendationCard({ recommendation: rec, onExecute }: RecommendationCa
       </p>
 
       {/* Price Levels */}
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        <div className="bg-card/50 p-2 rounded-lg">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-3">
+        <div className="bg-card/50 p-2 rounded-lg min-w-0">
           <div className="flex items-center gap-1 mb-1">
-            <Target className="w-3 h-3 text-primary" />
+            <Target className="w-3 h-3 text-primary shrink-0" />
             <span className="text-xs text-muted-foreground">Entry</span>
           </div>
-          <span className="text-sm font-bold font-mono text-foreground">
+          <span className="text-sm font-bold font-mono text-foreground break-all">
             ${rec.entry_price.toLocaleString()}
           </span>
         </div>
 
-        <div className="bg-card/50 p-2 rounded-lg">
+        <div className="bg-card/50 p-2 rounded-lg min-w-0">
           <div className="flex items-center gap-1 mb-1">
-            <Shield className="w-3 h-3 text-red-500" />
+            <Shield className="w-3 h-3 text-red-500 shrink-0" />
             <span className="text-xs text-muted-foreground">Stop</span>
           </div>
-          <span className="text-sm font-bold font-mono text-foreground">
+          <span className="text-sm font-bold font-mono text-foreground break-all">
             ${rec.stop_price.toLocaleString()}
           </span>
         </div>
 
-        <div className="bg-card/50 p-2 rounded-lg">
+        <div className="bg-card/50 p-2 rounded-lg min-w-0">
           <div className="flex items-center gap-1 mb-1">
-            <Target className="w-3 h-3 text-emerald-500" />
+            <Target className="w-3 h-3 text-emerald-500 shrink-0" />
             <span className="text-xs text-muted-foreground">Target</span>
           </div>
-          <span className="text-sm font-bold font-mono text-foreground">
+          <span className="text-sm font-bold font-mono text-foreground break-all">
             ${rec.target_price.toLocaleString()}
           </span>
         </div>
@@ -315,9 +315,8 @@ function RecommendationCard({ recommendation: rec, onExecute }: RecommendationCa
       {/* Action Button */}
       <Button 
         onClick={onExecute}
-        className="w-full gap-2"
+        className="w-full gap-2 min-h-12 text-base"
         variant="default"
-        size="sm"
       >
         <Zap className="w-4 h-4" />
         Create Trade Idea
@@ -325,7 +324,7 @@ function RecommendationCard({ recommendation: rec, onExecute }: RecommendationCa
 
       {/* Reasoning (Expandable) */}
       <details className="mt-3">
-        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+        <summary className="min-h-11 flex items-center text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
           View detailed analysis
         </summary>
         <div className="mt-2 p-3 bg-card/30 rounded-lg border border-border">

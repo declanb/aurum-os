@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, Search } from "lucide-react";
 import type { RxTicker } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface MarketListProps {
   selectedSymbol: string;
   onSelect: (symbol: string) => void;
   tickers: RxTicker[];
+  variant?: "panel" | "strip";
 }
 
 const NAME_MAP: Record<string, string> = {
@@ -23,7 +25,7 @@ const NAME_MAP: Record<string, string> = {
   "MATIC/USD": "Polygon",
 };
 
-export function MarketList({ selectedSymbol, onSelect, tickers }: MarketListProps) {
+export function MarketList({ selectedSymbol, onSelect, tickers, variant = "panel" }: MarketListProps) {
   const [search, setSearch] = useState("");
   const baselineRef = useRef<Record<string, number>>({});
 
@@ -52,8 +54,45 @@ export function MarketList({ selectedSymbol, onSelect, tickers }: MarketListProp
       m.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  if (variant === "strip") {
+    return (
+      <div className="flex gap-2 overflow-x-auto p-3 snap-x snap-mandatory overscroll-x-contain">
+        {filtered.length === 0 && (
+          <p className="px-2 py-3 text-sm text-muted-foreground">Connecting to Revolut X…</p>
+        )}
+        {filtered.map((m) => {
+          const isSelected = m.symbol === selectedSymbol;
+          const isUp = m.change24h >= 0;
+          const decimals = m.price < 1 ? 5 : m.price < 100 ? 3 : 2;
+          return (
+            <button
+              key={m.symbol}
+              type="button"
+              onClick={() => onSelect(m.symbol)}
+              aria-pressed={isSelected}
+              className={cn(
+                "snap-start shrink-0 min-h-14 min-w-[7.5rem] px-3 py-2 rounded-xl border text-left",
+                isSelected ? "border-primary bg-accent" : "border-border bg-card"
+              )}
+            >
+              <p className="text-sm font-semibold text-foreground">{m.symbol}</p>
+              <p className="text-xs font-mono text-muted-foreground">
+                {m.price.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+                <span className={isUp ? "text-emerald-500" : "text-red-500"}>
+                  {" "}
+                  {isUp ? "+" : ""}
+                  {m.change24h.toFixed(2)}%
+                </span>
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full bg-card border-r border-border">
+    <div className="flex flex-col h-full min-h-0 bg-card border-r border-border">
       <div className="p-3 border-b border-border">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -86,8 +125,9 @@ export function MarketList({ selectedSymbol, onSelect, tickers }: MarketListProp
           return (
             <button
               key={m.symbol}
+              type="button"
               onClick={() => onSelect(m.symbol)}
-              className={`w-full grid grid-cols-[1fr_auto_auto] gap-3 px-3 py-2.5 text-sm border-l-2 transition-colors text-left ${
+              className={`w-full grid grid-cols-[1fr_auto_auto] gap-3 px-3 py-2.5 min-h-12 text-sm border-l-2 transition-colors text-left ${
                 isSelected
                   ? "bg-accent border-l-primary"
                   : "border-l-transparent hover:bg-accent/50"

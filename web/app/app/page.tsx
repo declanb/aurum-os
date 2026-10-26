@@ -112,15 +112,15 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 max-w-7xl">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-1">
             {greeting}, Declan.
           </h1>
           <p className="text-muted-foreground">Live from your Revolut X account.</p>
         </div>
         {lastUpdated && (
-          <div className="text-right text-xs text-muted-foreground flex items-center gap-1.5">
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5 sm:text-right">
             <RefreshCw className="w-3 h-3" />
             Updated {lastUpdated.toLocaleTimeString()}
           </div>
@@ -224,14 +224,14 @@ export default function Dashboard() {
                 const pct = totalUsd > 0 ? (bal.usdValue / totalUsd) * 100 : 0;
                 const ticker = tickers.find((t) => t.symbol === `${bal.currency}/USD`);
                 return (
-                  <div key={bal.currency} className="flex items-center justify-between py-3 border-b border-border last:border-0">
-                    <div className="flex items-center gap-3">
+                  <div key={bal.currency} className="flex items-center justify-between gap-3 py-3 border-b border-border last:border-0">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
                         {bal.currency.substring(0, 3)}
                       </div>
                       <div>
                         <p className="font-semibold text-foreground">{bal.currency}</p>
-                        <p className="text-xs text-muted-foreground font-mono">
+                        <p className="text-xs text-muted-foreground font-mono break-all">
                           {bal.balance.toFixed(bal.currency === "EUR" || bal.currency === "USD" ? 2 : 8)}
                           {ticker && (
                             <span className="ml-2 text-muted-foreground">
@@ -241,7 +241,7 @@ export default function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p className="font-mono text-foreground font-semibold">
                         €{bal.eurValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
@@ -263,15 +263,15 @@ export default function Dashboard() {
 
       {/* AI Recommendations */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardHeader className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between pb-2">
           <CardTitle className="text-lg font-semibold text-foreground">
             Helm Trade Ideas
           </CardTitle>
-          <Link href="/app/approvals">
-            <Button variant="outline" size="sm" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2 w-full sm:w-auto" asChild>
+            <Link href="/app/approvals">
               Review All <ArrowRight className="w-3 h-3" />
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </CardHeader>
         <CardContent>
           {pendingApproval.length === 0 ? (
@@ -305,23 +305,26 @@ export default function Dashboard() {
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{trade.thesis}</p>
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-4 text-muted-foreground">
-                        <span>
-                          Entry: <span className="font-mono text-foreground">{trade.entry_price}</span>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm">
+                      <div className="grid grid-cols-3 gap-2 text-muted-foreground min-w-0">
+                        <span className="min-w-0">
+                          Entry
+                          <span className="block font-mono text-foreground break-all">{trade.entry_price}</span>
                         </span>
-                        <span>
-                          SL: <span className="font-mono text-foreground">{trade.stop_price}</span>
+                        <span className="min-w-0">
+                          SL
+                          <span className="block font-mono text-foreground break-all">{trade.stop_price}</span>
                         </span>
-                        <span>
-                          TP: <span className="font-mono text-foreground">{trade.target_price}</span>
+                        <span className="min-w-0">
+                          TP
+                          <span className="block font-mono text-foreground break-all">{trade.target_price}</span>
                         </span>
                       </div>
-                      <Link href="/app/approvals">
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1">
+                      <Button variant="ghost" size="sm" className="w-full sm:w-auto gap-1" asChild>
+                        <Link href="/app/approvals">
                           Review <ArrowRight className="w-3 h-3" />
-                        </Button>
-                      </Link>
+                        </Link>
+                      </Button>
                     </div>
                   </div>
                 );
@@ -371,18 +374,18 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="flex gap-3">
-        <Link href="/app/approvals" className="flex-1">
-          <Button className="w-full gap-2" size="lg">
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Button className="w-full gap-2 flex-1" size="lg" asChild>
+          <Link href="/app/approvals">
             <AlertCircle className="w-4 h-4" />
             Review Pending Trades
-          </Button>
-        </Link>
-        <Link href="/app/planner" className="flex-1">
-          <Button variant="outline" className="w-full gap-2" size="lg">
+          </Link>
+        </Button>
+        <Button variant="outline" className="w-full gap-2 flex-1" size="lg" asChild>
+          <Link href="/app/planner">
             Plan New Trade
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
     </div>
   );

@@ -4,16 +4,16 @@ import Link from "next/link";
 
 export default function LandingPage() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background flex flex-col items-center justify-center p-6 text-center">
+    <div className="relative min-h-dvh overflow-x-hidden bg-background flex flex-col items-center p-4 sm:p-6 text-center">
       {/* Subtle ambient lighting */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-150 h-150 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="z-10 max-w-3xl space-y-8">
+      <div className="z-10 max-w-3xl space-y-8 py-16 sm:py-24">
         <div className="inline-flex h-9 items-center justify-center rounded-full border border-border bg-muted px-4 text-xs font-semibold uppercase tracking-widest text-primary">
           Discretionary Execution Model
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-foreground">
+        <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight text-foreground">
           <span className="text-primary">Helm</span>
         </h1>
 
@@ -21,19 +21,19 @@ export default function LandingPage() {
           AI-native crypto trading copilot. Designed for disciplined, high-conviction discretionary execution with immutable audit trails. You stay at the helm.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <Link href="/app">
-            <Button size="lg" className="w-full sm:w-auto h-12 px-8 font-bold rounded-xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-4 pt-4 w-full">
+          <Button size="lg" className="w-full sm:w-auto h-12 px-8 font-bold rounded-xl" asChild>
+            <Link href="/app">
               Enter Workspace
-            </Button>
-          </Link>
+            </Link>
+          </Button>
           <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-8 font-medium rounded-xl">
             View Architecture
           </Button>
         </div>
       </div>
 
-      <div className="absolute bottom-12 w-full max-w-5xl px-6 grid grid-cols-1 md:grid-cols-3 gap-6 z-10 text-left">
+      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 z-10 text-left mt-auto pb-6">
         <GlassCard className="p-6">
           <div className="text-primary mb-2">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>

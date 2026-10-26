@@ -57,7 +57,7 @@ export function OrderBook({ symbol, midPrice }: OrderBookProps) {
   const maxAskTotal = Math.max(...asks.map((a) => a.total), 1);
 
   return (
-    <div className="flex flex-col h-full bg-card border-r border-border">
+    <div className="flex flex-col h-full min-h-0 bg-card lg:border-r border-border">
       <div className="px-3 py-2.5 border-b border-border">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Order Book · Live</h3>
       </div>

@@ -27,7 +27,7 @@ export function PaperModePill() {
   if (!paper) return null;
 
   return (
-    <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/40">
+    <div className="flex items-center gap-1.5 px-2 py-1 md:px-3 md:py-1.5 rounded-md bg-amber-500/10 border border-amber-500/40 shrink-0">
       <FlaskConical className="w-3.5 h-3.5 text-amber-500" />
       <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
         PAPER

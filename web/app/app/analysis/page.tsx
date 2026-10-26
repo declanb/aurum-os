@@ -50,17 +50,18 @@ export default function AnalysisWorkspace() {
     };
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">Market Analysis</h1>
+        <div className="space-y-6 max-w-7xl mx-auto lg:h-[calc(100dvh-8rem)] flex flex-col min-w-0">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-1">Market Analysis</h1>
                     <p className="text-muted-foreground">Contextualize price action and validate market state.</p>
                 </div>
-                <div className="flex gap-3">
-                    <Button variant="outline">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <Button variant="outline" className="w-full sm:w-auto min-h-11">
                         <RefreshCw className="w-4 h-4 mr-2" /> Refresh Chart
                     </Button>
                     <Button
+                        className="w-full sm:w-auto min-h-11"
                         onClick={handleSave}
                         disabled={isSaving}
                     >
@@ -74,15 +75,16 @@ export default function AnalysisWorkspace() {
                 <div className="col-span-1 lg:col-span-2 flex flex-col gap-6 h-full">
                     {/* Chart Placeholder */}
                     <GlassCard className="flex-1 flex flex-col overflow-hidden min-h-100">
-                        <div className="h-12 border-b border-border bg-muted/50 px-4 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-4">
+                        <div className="min-h-12 border-b border-border bg-muted/50 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <span className="text-foreground font-bold tracking-wide">BTC-USD</span>
-                                <div className="flex gap-2">
+                                <div className="flex gap-1">
                                     {['1H', '4H', 'D', 'W'].map(tf => (
                                         <button
                                             key={tf}
+                                            type="button"
                                             onClick={() => setFormData(p => ({ ...p, timeframe: tf }))}
-                                            className={`text-xs px-2 py-1 rounded transition-colors ${formData.timeframe === tf ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                                            className={`min-h-11 min-w-11 text-sm px-3 rounded transition-colors ${formData.timeframe === tf ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}
                                         >
                                             {tf}
                                         </button>
@@ -115,7 +117,7 @@ export default function AnalysisWorkspace() {
                     </GlassCard>
 
                     {/* Market Facts Row */}
-                    <div className="grid grid-cols-3 gap-6 shrink-0 h-32">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 shrink-0">
                         <Card>
                             <CardHeader className="p-4 pb-2">
                                 <CardTitle className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Market State</CardTitle>
@@ -185,7 +187,7 @@ export default function AnalysisWorkspace() {
                         </div>
                     </GlassCard>
 
-                    <GlassCard className="h-2/5 shrink-0 flex flex-col">
+                    <GlassCard className="min-h-56 h-64 lg:h-2/5 shrink-0 flex flex-col">
                         <div className="p-4 px-5 border-b border-border flex space-between items-center bg-muted/50">
                             <h3 className="font-bold text-foreground text-sm uppercase tracking-widest">My Context Notes</h3>
                         </div>

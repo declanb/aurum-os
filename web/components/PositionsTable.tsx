@@ -60,9 +60,9 @@ export function PositionsTable({ refreshKey }: PositionsTableProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-card">
+    <div className="flex flex-col h-full min-w-0 bg-card">
       {/* Tabs */}
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border overflow-x-auto min-w-0">
         {(["pending", "open", "history"] as Tab[]).map((t) => {
           const count = trades.filter((tr) => {
             if (t === "open") return tr.status === "Sent";
@@ -72,14 +72,15 @@ export function PositionsTable({ refreshKey }: PositionsTableProps) {
           return (
             <button
               key={t}
+              type="button"
               onClick={() => setTab(t)}
-              className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-wider border-b-2 transition-colors ${
+              className={`shrink-0 min-h-11 px-4 text-sm font-semibold uppercase tracking-wider border-b-2 transition-colors ${
                 tab === t
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t} {count > 0 && <span className="ml-1 text-[10px] text-muted-foreground">({count})</span>}
+              {t} {count > 0 && <span className="ml-1 text-xs text-muted-foreground">({count})</span>}
             </button>
           );
         })}
@@ -92,7 +93,64 @@ export function PositionsTable({ refreshKey }: PositionsTableProps) {
         ) : filtered.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">No {tab} trades</div>
         ) : (
-          <table className="w-full text-xs">
+          <>
+          <div className="md:hidden divide-y divide-border/50">
+            {filtered.map((t) => {
+              const risk = Math.abs(t.entry_price - t.stop_price);
+              const reward = Math.abs(t.target_price - t.entry_price);
+              const rr = risk > 0 ? (reward / risk).toFixed(2) : "—";
+              const bracket = brackets.find(
+                (b) => b.trade_idea_id === t.id || b.exit_trade_idea_id === t.id,
+              );
+              return (
+                <article key={t.id} className="p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-semibold text-base text-foreground">{t.symbol}</span>
+                      <span className={`font-bold text-sm ${t.direction === "LONG" ? "text-emerald-500" : t.direction === "EXIT" ? "text-amber-500" : "text-red-500"}`}>
+                        {t.direction}
+                      </span>
+                    </div>
+                    {statusBadge(t.status)}
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">Entry</dt>
+                      <dd className="font-mono break-all">{t.entry_price.toFixed(2)}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">Stop</dt>
+                      <dd className="font-mono text-red-500/80 break-all">{t.stop_price.toFixed(2)}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">Target</dt>
+                      <dd className="font-mono text-emerald-500/80 break-all">{t.target_price.toFixed(2)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">R:R</dt>
+                      <dd className="font-mono">1:{rr}</dd>
+                    </div>
+                  </dl>
+                  {bracket && (
+                    <p className="text-sm">
+                      <span className="font-semibold text-foreground">
+                        {exitStatusLabel(bracket.status)}
+                        {bracket.trail_armed ? " · trail" : ""}
+                      </span>
+                      <span className="block text-xs text-muted-foreground font-mono break-all">
+                        stop {bracket.stop_price} → {bracket.target_price}
+                        {bracket.exit_reason ? ` · ${bracket.exit_reason}` : ""}
+                      </span>
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(t.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+          <table className="hidden md:table w-full text-xs">
             <thead className="bg-muted/30 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="text-left px-4 py-2">Symbol</th>
@@ -151,6 +209,7 @@ export function PositionsTable({ refreshKey }: PositionsTableProps) {
               })}
             </tbody>
           </table>
+          </>
         )}
       </div>
     </div>
