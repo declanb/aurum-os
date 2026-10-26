@@ -28,6 +28,7 @@ def challenge_trade(*, session: Session = Depends(get_session), trade_id: int):
     return result
 
 @router.post("/", response_model=TradeIdeaRead)
+@router.post("", response_model=TradeIdeaRead, include_in_schema=False)
 def create_trade(*, session: Session = Depends(get_session), trade: TradeIdeaCreate):
     db_trade = TradeIdea.model_validate(trade, update={"user_id": MOCK_USER_ID})
     session.add(db_trade)
