@@ -61,7 +61,7 @@ def _verify_cron_secret(authorization: Optional[str]) -> None:
 @router.get("/cron/scout")
 async def scout_tick(authorization: Optional[str] = Header(None)):
     """
-    AI Scout — polls market data, generates trade recommendations, auto-approves winners.
+    AI Scout — polls market data, stages TradeIdeas for approval; auto-approves only when enabled.
     
     Triggered by Vercel cron every 30 minutes.
     Cost: ~$0.04/day OpenAI (gpt-4o-mini, 8 symbols × 48 runs).
@@ -111,15 +111,19 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
         logger.error(f"AI advisor failed: {exc}")
         return {"status": "error", "reason": str(exc), "recommendations": 0}
     
-    # Auto-approve eligible
+    # Stage every rec for human approval. Optionally auto-approve when enabled.
+    # NEVER place broker orders from this cron — execute stays a manual click.
     approved_count = 0
     approved_symbols = []
-    
+    staged_count = 0
+    staged_ids = []
+    skipped = []
+
     for rec in recs:
         symbol = rec.get("symbol")
-        
-        # Skip if already claimed
-        # (In serverless, we can't use agent_registry, so check open positions in DB instead)
+
+        # Skip if already have an open TradeIdea/position for this symbol
+        # (In serverless, we can't use agent_registry, so check DB instead)
         try:
             with Session(engine) as session:
                 existing = session.exec(
@@ -130,18 +134,39 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
                 ).first()
                 if existing:
                     logger.info(f"  {symbol}: SKIP (already have open position)")
+                    skipped.append({"symbol": symbol, "reason": "open_position"})
                     continue
         except Exception as exc:
             logger.warning(f"  {symbol}: DB check failed: {exc}")
+            skipped.append({"symbol": symbol, "reason": f"db_check:{exc}"})
             continue
-        
-        # Evaluate
+
+        # Always stage into Approvals when auto-approve is off (or regardless,
+        # matching local scout_agent). stage_recommendation is idempotent.
+        try:
+            with Session(engine) as session:
+                staged, stage_msg, staged_id = auto_approver.stage_recommendation(session, rec)
+                if staged:
+                    logger.info(f"  {symbol}: 📋 STAGED #{staged_id} ({stage_msg})")
+                    staged_count += 1
+                    staged_ids.append(staged_id)
+                else:
+                    logger.info(f"  {symbol}: not staged ({stage_msg})")
+                    skipped.append({"symbol": symbol, "reason": stage_msg})
+        except Exception as exc:
+            logger.error(f"  {symbol}: ERROR staging rec: {exc}")
+            skipped.append({"symbol": symbol, "reason": f"stage_error:{exc}"})
+            continue
+
+        # Auto-approve only when the master switch is on (still no broker order)
+        if not settings.AURUM_AUTO_APPROVE:
+            continue
+
         eligible, reason = auto_approver.evaluate(rec, edge)
         if not eligible:
-            logger.info(f"  {symbol}: NOT ELIGIBLE ({reason})")
+            logger.info(f"  {symbol}: AUTO-APPROVE skipped ({reason})")
             continue
-        
-        # Auto-approve
+
         try:
             with Session(engine) as session:
                 approved, msg, trade_id = auto_approver.try_auto_approve(session, rec, edge)
@@ -153,13 +178,17 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
                     logger.info(f"  {symbol}: ❌ BLOCKED ({msg})")
         except Exception as exc:
             logger.error(f"  {symbol}: ERROR during auto-approve: {exc}")
-    
+
     return {
         "status": "success",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "recommendations": len(recs),
+        "staged": staged_count,
+        "staged_ids": staged_ids,
         "approved": approved_count,
         "approved_symbols": approved_symbols,
+        "skipped": skipped[:20],
+        "auto_approve": bool(settings.AURUM_AUTO_APPROVE),
     }
 
 

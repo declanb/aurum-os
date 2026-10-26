@@ -46,6 +46,7 @@ def create_trade(*, session: Session = Depends(get_session), trade: TradeIdeaCre
     return db_trade
 
 @router.get("/", response_model=List[TradeIdeaRead])
+@router.get("", response_model=List[TradeIdeaRead], include_in_schema=False)
 def read_trades(*, session: Session = Depends(get_session), status: str = None):
     query = select(TradeIdea).where(TradeIdea.user_id == MOCK_USER_ID)
     if status:
