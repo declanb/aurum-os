@@ -44,6 +44,7 @@ or submit orders.
 | human Approvals | `api/routers/approvals.py` | No | Built. This is the `ApprovalEvent` |
 | trade_executor | `trade_executor.py` via `POST /api/revolut-x/execute/{id}` | Yes, after the event | Built |
 | profit_hunter | `profit_hunter.py` | Exit sell for a position it was started on | Built |
+| paper copy book | `copy_book.py` | No. Virtual fills only | Built. Dry-run. Not on the execute path |
 | Trading Guru | `.github/agents/trading-guru.agent.md` and `/app/guru` | No | Built. Not on the write path |
 
 `scout_agent` (`api/services/scout_agent.py` and `GET /cron/scout`) is the loop around the recommender. It polls, asks `ai_advisor` for recommendations, stages them as `Ready for Approval`, and may auto-approve when that flag is on. It does not call `trade_executor`.
@@ -151,6 +152,10 @@ Trading Guru stays advisory-only. The same mentor is available in the web app at
 `/app/agents` shows live cards for this fleet: scout, recommender, guardian, trend scout, exit brackets, and profit hunters. Health is the registry heartbeat (healthy, stale, idle, or off). Last action is the note each agent records, or the newest staged idea and armed bracket when a cron pass left no process. Pause and resume use the existing global flag. Clear drops one stale registry row.
 
 Approvals shows "Why this idea" from the TradeIdea thesis, levels, and invalidation, then one advisory follow-up. Approve and Execute stay on their own buttons.
+
+## Paper copy book
+
+`api/services/copy_book.py` and `POST /api/copy/session` simulate following scout `TradeIdea` rows and EUR ticker gainers. Revolut X has no native copy API, so this is signal-layer paper mirroring on a virtual book (default €200, `HELM_COPY_BANKROLL_EUR`). It reads ideas and tickers. It does not import the order service, does not change idea status, and does not arm a live exit bracket. Details: `docs/helm-copy-book.md`.
 
 ## Out of scope for this slice
 

@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -25,6 +26,21 @@ class Settings(BaseSettings):
     # adapter_status="PaperFilled" so the rest of the system treats them normally.
     PAPER_TRADING: bool = False
     PAPER_STARTING_BALANCE_EUR: float = 1000.0
+
+    # ── Paper copy book (dry-run only; never a broker order) ──────────────
+    # Revolut X has no native copy API. This virtual book mirrors scout
+    # TradeIdeas and EUR ticker gainers. HELM_COPY_BANKROLL_EUR is the
+    # starting cash. AURUM_COPY_BANKROLL_EUR is accepted as an alias.
+    # See docs/helm-copy-book.md. This flag does not enable PAPER_TRADING
+    # and does not reach the order path.
+    HELM_COPY_BANKROLL_EUR: float = Field(
+        default=200.0,
+        validation_alias=AliasChoices("HELM_COPY_BANKROLL_EUR", "AURUM_COPY_BANKROLL_EUR"),
+    )
+    HELM_COPY_POSITION_PCT: float = 0.10       # fraction of virtual equity per new name
+    HELM_COPY_MAX_NOTIONAL_EUR: float = 40.0   # hard cap per name, also clamped to 25% of bankroll
+    HELM_COPY_MAX_POSITIONS: int = 5
+    HELM_COPY_GAINER_LIMIT: int = 3
 
     # ── Auto-approve (Trade Advisor → Approved TradeIdea, NO order placement) ────
     # Off by default. Flip AURUM_AUTO_APPROVE=1 in .env to enable.

@@ -22,6 +22,8 @@ Required path:
 
 `AURUM_TREND_SCOUT`, `AURUM_TREND_CONTEXT`, and `include_trends` end at the advisor prompt and the Approvals queue. They must not open an execution path.
 
+The paper copy book (`api/services/copy_book.py`, `/api/copy`, `/app/copy`) is a virtual EUR book. It may read `TradeIdea` rows and tickers. It must not call the order service, write an `ApprovalEvent`, or create an `ExecutionTicket`. Do not turn `dry_run` into a live switch. See `docs/helm-copy-book.md`.
+
 ## Live-book guardrails
 
 - **Spot only.** Revolut X spot. Do not add shorts, margin, leverage, or perps. Leave `AUTO_APPROVE_ALLOW_SHORTS` false. Do not raise `AUTO_APPROVE_MAX_PER_DAY` (3) or `AUTO_APPROVE_MAX_RISK_EUR` (2.0) unless the task explicitly says so.

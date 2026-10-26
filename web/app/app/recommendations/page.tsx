@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 
+import { CopyBookStrip } from "@/components/CopyBookStrip";
 import { PipelineIdeas } from "@/components/PipelineIdeas";
 import { Button } from "@/components/ui/button";
 import { fetchTradesResult, type TradeIdea } from "@/lib/api";
@@ -59,6 +60,7 @@ export default function RecommendationsPage() {
           </Button>
         </div>
       </div>
+      <CopyBookStrip />
       <PipelineIdeas trades={trades} error={error} loading={loading} />
     </div>
   );
