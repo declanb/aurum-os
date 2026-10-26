@@ -5,6 +5,16 @@ All notable changes to Aurum OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Vercel Cron `GET /api/cron/scout` every 15 minutes (`vercel.json`). Requires Vercel Pro; Hobby rejects sub-daily crons.
+- Scout cron stages recommendations as **Ready for Approval** when `AURUM_AUTO_APPROVE` is off, so they show on `/app/approvals`.
+
+### Changed
+- Production HITL: `AURUM_AGENTS_ENABLED=true` and `AURUM_AUTO_APPROVE=0`. Declan signs an `ApprovalEvent`, then Execute sends the broker order.
+- `/api/cron/hunt` stays off the cron schedule because it places market sells.
+
 ## [1.0.0] - 2026-06-05
 
 ### 🎉 Initial Production Release

@@ -180,9 +180,26 @@ curl -X POST http://localhost:8000/api/agent/clean
 
 ## Configuration
 
-### Enable auto-approve
+### Production cron (prompts Declan)
 
-Add to `.env`:
+Vercel Cron calls `GET /api/cron/scout` every 15 minutes. Set these in the Vercel project:
+
+```bash
+AURUM_AGENTS_ENABLED=true
+AURUM_AUTO_APPROVE=0
+CRON_SECRET=<generate-in-vercel-dashboard>
+```
+
+With auto-approve off, scout saves each recommendation as a TradeIdea in **Ready for Approval** (thesis prefix `[SCOUT]`). Declan opens `/app/approvals`, clicks **Sign & Approve** (that inserts an `ApprovalEvent`), then **Send to Execution Matrix**. Execute checks the `ApprovalEvent` and is the broker write. Shorts stay blocked. `CRON_SECRET` is sent by Vercel as a bearer token; leave the value out of git.
+
+`/api/cron/hunt` is not in `vercel.json`. That handler places market sells on its own. Close a position with the same Execute step.
+
+A 15-minute schedule needs Vercel Pro. Hobby rejects it and blocks the deploy.
+
+### Optional local auto-approve
+
+Add to `.env` only when you want the local scout loop to mark winners Approved as well as staged. This still does not place an order:
+
 ```bash
 AURUM_AUTO_APPROVE=1
 AUTO_APPROVE_MIN_CONFIDENCE=80
@@ -207,7 +224,7 @@ curl -X POST http://localhost:8000/api/agent/pause
 
 ## Safety
 
-1. **No auto-execution** — scout only auto-approves TradeIdeas. You still manually click "Execute" to place the broker order.
+1. **No auto-execution** — production scout stages TradeIdeas for `/app/approvals`. Sign & Approve writes an `ApprovalEvent`. Execute is the click that places the broker order.
 2. **Symbol collision prevention** — scout won't auto-approve a symbol that profit_hunter has already claimed.
 3. **Daily cap** — max 3 auto-approvals per 24h (rolling window).
 4. **Personal-edge filter** — only auto-approves symbols you've historically traded.

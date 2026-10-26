@@ -2,14 +2,14 @@
 
 ## ✅ What Was Refactored
 
-1. **Created `/api/cron/scout`** — AI recommendations every 30 minutes
-2. **Created `/api/cron/hunt`** — Position exit monitoring every 2 minutes
+1. **`GET /api/cron/scout`** — AI recommendations every 15 minutes, staged for Approvals
+2. **`GET /api/cron/hunt`** — exists in the API and is **not** on the Vercel schedule (it places market sells)
 3. **Cost protection**:
    - gpt-4o-mini by default (10x cheaper)
-   - Rate limiting (min 25min scout, 110s hunt)
+   - Rate limiting (min 14min scout, 110s hunt)
    - Global kill switch (`AURUM_AGENTS_ENABLED`)
    - Cron secret auth
-4. **Updated `vercel.json`** with cron schedule
+4. **`vercel.json` `crons`** calls `/api/cron/scout` on `*/15 * * * *`
 5. **Added revx CLI** to package.json
 
 ## 📝 Environment Variables to Set in Vercel
@@ -26,16 +26,22 @@ REVOLUT_X_API_KEY=<your-revolut-x-api-key>   # set in Vercel env, never commit
 ### Agent Control
 ```
 AURUM_AGENTS_ENABLED=true
-AURUM_AUTO_APPROVE=true
+AURUM_AUTO_APPROVE=0
 SCOUT_SYMBOLS=BTC-EUR,SOL-EUR,SHIB-EUR,AVAX-EUR,ENA-EUR,DOGE-EUR,SUI-EUR,XRP-EUR
 SCOUT_PLAYBOOK=trend_follower
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-### Optional (Security)
+`AURUM_AUTO_APPROVE=0` is the setting that prompts Declan. Each scout tick calls `stage_recommendation` and saves a TradeIdea as **Ready for Approval**. On `/app/approvals` he clicks **Sign & Approve** (writes an `ApprovalEvent`) and then **Send to Execution Matrix**. Execute is the only production path that sends a Revolut X order. Spot shorts stay blocked (`AUTO_APPROVE_ALLOW_SHORTS` defaults to false).
+
+Leave `AURUM_AUTO_APPROVE` off. Turning it on also marks high-confidence ideas Approved inside the cron, and those rows have no `ApprovalEvent`, so Execute refuses them. The staged **Ready for Approval** row is the one that can be signed and sent.
+
+### Cron auth
 ```
-CRON_SECRET=<random-string>  # Protects cron endpoints from external calls
+CRON_SECRET=<generate-in-vercel-dashboard>
 ```
+
+Set this in Vercel only. When the variable is present, Vercel calls cron paths with `Authorization: Bearer <CRON_SECRET>`, and `/api/cron/scout` rejects any other caller. Do not commit the value.
 
 ## 🔒 Cost Protection Setup (Do AFTER deploy)
 
@@ -60,9 +66,9 @@ CRON_SECRET=<random-string>  # Protects cron endpoints from external calls
 |---|---|
 | Vercel Pro | $20 (you're paying anyway) |
 | Vercel overage | $0-2 |
-| OpenAI (gpt-4o-mini @ 30min scout) | $1-2 |
+| OpenAI (gpt-4o-mini @ 15min scout) | $2-4 |
 | Supabase | $0 (free tier) |
-| **Total NEW spend** | **$1-4/month** |
+| **Total NEW spend** | **$2-6/month** |
 
 ## 🚨 Kill Switch
 
@@ -74,14 +80,19 @@ If costs spike or agents misbehave:
 ## ✅ Verification After Deploy
 
 1. Check crons registered: Vercel Dashboard → Deployments → (your project) → Cron Jobs tab
-2. Test scout manually: `curl https://your-domain.vercel.app/api/cron/scout`
-3. Test hunter manually: `curl https://your-domain.vercel.app/api/cron/hunt`
-4. Wait 30 min → Check logs for first real scout run
-5. Check OpenAI usage after 24h
+2. Test scout manually (secret stays in your shell, not in the repo):
+
+   ```bash
+   curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.vercel.app/api/cron/scout
+   ```
+
+   A successful body includes `"staged"` and `"auto_approve": false`. New rows show up on `/app/approvals` as **Ready for Approval**.
+3. Wait 15 min → Check logs for the first scheduled scout run
+4. Check OpenAI usage after 24h
 
 ## 📝 Cron Schedule
 
-- **Scout** (`/api/cron/scout`): Every 30 minutes = 48 runs/day
-- **Hunter** (`/api/cron/hunt`): Every 2 minutes = 720 runs/day
+- **Scout** (`/api/cron/scout`): every 15 minutes (`*/15 * * * *`) = 96 runs/day. In-process floor is 14 minutes.
+- **Hunter** (`/api/cron/hunt`): no Vercel cron. The handler sells at market when a target is hit, with no `ApprovalEvent`. Exits stay on Approvals → Execute.
 
-Both have rate limiting in code as backup.
+**Plan:** a 15-minute expression requires Vercel Pro. Hobby accounts only allow a cron that runs once per day, and a faster expression fails the deployment (the same check that removed the old `*/30` and `*/2` entries). Confirm the project is on Pro before merging.

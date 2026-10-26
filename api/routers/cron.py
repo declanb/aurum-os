@@ -1,8 +1,8 @@
 """
 Vercel Cron Jobs — stateless, serverless agent endpoints.
 
-These replace the long-running agent loops (scout_agent.py, profit_hunter.py)
-with cron-triggered functions for 24/7 autonomous operation on Vercel.
+Scout is invoked by Vercel Cron and stages TradeIdeas for human approval.
+The hunt route can sell positions; it is not registered in vercel.json.
 
 Cost protection:
 - AURUM_AGENTS_ENABLED env var = global kill switch
@@ -61,10 +61,12 @@ def _verify_cron_secret(authorization: Optional[str]) -> None:
 @router.get("/cron/scout")
 async def scout_tick(authorization: Optional[str] = Header(None)):
     """
-    AI Scout — polls market data, generates trade recommendations, auto-approves winners.
-    
-    Triggered by Vercel cron every 30 minutes.
-    Cost: ~$0.04/day OpenAI (gpt-4o-mini, 8 symbols × 48 runs).
+    AI Scout — polls market data and stages trade recommendations for approval.
+
+    Vercel cron calls this every 15 minutes (root vercel.json). With
+    AURUM_AUTO_APPROVE off, each idea is stored as Ready for Approval.
+    Declan signs it on the Approvals page, which writes an ApprovalEvent,
+    then clicks Execute. This handler never places a broker order.
     """
     _verify_cron_secret(authorization)
     
@@ -72,8 +74,9 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
     if not settings.AURUM_AGENTS_ENABLED:
         return {"status": "disabled", "reason": "AURUM_AGENTS_ENABLED=false"}
     
-    # Rate limit (belt-and-suspenders)
-    if not _check_rate_limit("scout", min_interval_seconds=25 * 60):  # 25min min
+    # Just under the */15 schedule so a warm instance still accepts the next
+    # tick, while a double-fire inside the same window is skipped.
+    if not _check_rate_limit("scout", min_interval_seconds=14 * 60):
         return {"status": "skipped", "reason": "rate_limited"}
     
     logger.info("──── SCOUT TICK (cron) ────")
@@ -107,65 +110,70 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
         logger.error(f"AI advisor failed: {exc}")
         return {"status": "error", "reason": str(exc), "recommendations": 0}
     
-    # Auto-approve eligible
+    # Always stage for the Approvals page. Auto-approve is optional and
+    # still does not send a broker order (Execute requires an ApprovalEvent).
+    staged_count = 0
+    staged_trade_ids: list[int] = []
     approved_count = 0
     approved_symbols = []
-    
+
     for rec in recs:
         symbol = rec.get("symbol")
-        
-        # Skip if already claimed
-        # (In serverless, we can't use agent_registry, so check open positions in DB instead)
+
         try:
             with Session(engine) as session:
-                existing = session.exec(
-                    select(Trade).where(
-                        Trade.symbol == symbol,
-                        Trade.status == "open"
-                    )
-                ).first()
-                if existing:
-                    logger.info(f"  {symbol}: SKIP (already have open position)")
-                    continue
+                staged, stage_msg, trade_id = auto_approver.stage_recommendation(session, rec)
+                if staged:
+                    logger.info(f"  {symbol}: STAGED #{trade_id} ({stage_msg})")
+                    staged_count += 1
+                    if trade_id is not None:
+                        staged_trade_ids.append(trade_id)
+                else:
+                    logger.info(f"  {symbol}: not staged ({stage_msg})")
         except Exception as exc:
-            logger.warning(f"  {symbol}: DB check failed: {exc}")
+            logger.error(f"  {symbol}: ERROR staging recommendation: {exc}")
+
+        if not settings.AURUM_AUTO_APPROVE:
+            logger.info(f"  {symbol}: waiting for Approvals (AURUM_AUTO_APPROVE off)")
             continue
-        
-        # Evaluate
+
         eligible, reason = auto_approver.evaluate(rec, edge)
         if not eligible:
             logger.info(f"  {symbol}: NOT ELIGIBLE ({reason})")
             continue
-        
-        # Auto-approve
+
         try:
             with Session(engine) as session:
                 approved, msg, trade_id = auto_approver.try_auto_approve(session, rec, edge)
                 if approved:
-                    logger.info(f"  {symbol}: ✅ AUTO-APPROVED #{trade_id} ({msg})")
+                    logger.info(f"  {symbol}: AUTO-APPROVED #{trade_id} ({msg})")
                     approved_count += 1
                     approved_symbols.append(symbol)
                 else:
-                    logger.info(f"  {symbol}: ❌ BLOCKED ({msg})")
+                    logger.info(f"  {symbol}: BLOCKED ({msg})")
         except Exception as exc:
             logger.error(f"  {symbol}: ERROR during auto-approve: {exc}")
-    
+
     return {
         "status": "success",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "recommendations": len(recs),
+        "staged": staged_count,
+        "staged_trade_ids": staged_trade_ids,
         "approved": approved_count,
         "approved_symbols": approved_symbols,
+        "auto_approve": bool(settings.AURUM_AUTO_APPROVE),
     }
 
 
 @router.get("/cron/hunt")
 async def hunt_tick(authorization: Optional[str] = Header(None)):
     """
-    Profit Hunter — checks all open positions, sells when profit target hit.
-    
-    Triggered by Vercel cron every 2 minutes.
-    Cost: ~$0.50/month Vercel compute (no LLM calls).
+    Profit Hunter — checks open positions and sells when a profit target is hit.
+
+    This route places market sells with no ApprovalEvent. It is left off
+    vercel.json so production cron cannot auto-execute exits. Close positions
+    from Approvals → Execute, which requires a signed ApprovalEvent.
     """
     _verify_cron_secret(authorization)
     

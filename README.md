@@ -67,6 +67,18 @@ This repository is structured for native deployment to Vercel via GitHub connect
    - Click Deploy. Vercel will build the `web` folder and deploy the `/api` Serverless Functions.
    - All PRs will generate automatic preview deployments.
 
+### Production scout (human approval)
+
+`vercel.json` schedules `GET /api/cron/scout` every 15 minutes. The handler writes each recommendation as a TradeIdea with status `Ready for Approval`. Open **Approvals** (`/app/approvals`), choose **Sign & Approve** (this stores an `ApprovalEvent`), then **Send to Execution Matrix**. That Execute click is the broker write.
+
+Set these on the Vercel project. Keep the secret out of git:
+
+- `AURUM_AGENTS_ENABLED=true` — `false` makes the cron return without staging
+- `AURUM_AUTO_APPROVE=0` — ideas stay in the approval queue
+- `CRON_SECRET` — a random string. Vercel sends it as `Authorization: Bearer …`, and the route checks it
+
+A 15-minute cron needs Vercel Pro. Hobby accounts reject any schedule that runs more than once a day, and that rejection blocks the deployment. `/api/cron/hunt` is intentionally unscheduled: that route places market sells. Exits use the same Approvals Execute step.
+
 ## Architecture Guidelines
 
 - All backend changes mapping to database schemas must use Alembic migrations.

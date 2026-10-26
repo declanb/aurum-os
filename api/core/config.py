@@ -18,11 +18,11 @@ class Settings(BaseSettings):
     PAPER_TRADING: bool = False
     PAPER_STARTING_BALANCE_EUR: float = 1000.0
 
-    # ── Auto-approve (Trade Advisor → Approved TradeIdea, NO order placement) ────
-    # Off by default. Flip AURUM_AUTO_APPROVE=1 in .env to enable.
-    # When enabled, high-confidence recommendations are auto-created as TradeIdeas
-    # AND auto-approved (status="Approved"), but no broker order is sent.
-    # You still execute manually from the Approvals page.
+    # ── Auto-approve (optional). Preferred production value is off (0). ────────
+    # Off: /api/cron/scout stages TradeIdeas as "Ready for Approval". Declan
+    # signs them on the Approvals page (writes ApprovalEvent) and clicks Execute.
+    # On: high-confidence ideas are also marked Approved. Broker orders are still
+    # a separate Execute click — this flag never places an order.
     AURUM_AUTO_APPROVE: bool = False
     AUTO_APPROVE_MIN_CONFIDENCE: int = 80    # rec.confidence_score must be ≥ this
     AUTO_APPROVE_MIN_EDGE_MATCH: int = 70    # rec.edge_match_score must be ≥ this
