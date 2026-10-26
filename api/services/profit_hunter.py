@@ -139,6 +139,10 @@ async def hunt(
             "poll_secs": poll_secs,
         },
     )
+    agent_registry.record_action(
+        agent_id,
+        f"Watching {symbol} for a bracket or profit-floor exit. Live mode does not sell.",
+    )
     
     logger.info("=" * 60)
     logger.info(f"🎯 PROFIT HUNTER ACTIVATED (agent_id={agent_id})")
@@ -174,6 +178,14 @@ async def hunt(
             # Heartbeat every ~60s
             if heartbeat_counter >= (60 / poll_secs):
                 agent_registry.heartbeat(agent_id)
+                agent_registry.record_action(
+                    agent_id,
+                    (
+                        f"Watching {symbol}. Last bid €{best_bid_seen:,.2f}."
+                        if best_bid_seen
+                        else f"Watching {symbol}. Waiting for a bid."
+                    ),
+                )
                 heartbeat_counter = 0
             heartbeat_counter += 1
 
@@ -227,6 +239,10 @@ async def hunt(
                 logger.info("Profit floor hit: €%+.4f (threshold €%+.4f)", pnl, min_profit_eur)
 
             if trigger:
+                agent_registry.record_action(
+                    agent_id,
+                    f"Exit signal {trigger} on {symbol} at bid {bid}. Live mode does not sell.",
+                )
                 result = await _execute_sell(symbol, qty, expected_bid=bid)
                 result["trigger"] = trigger
                 agent_registry.unregister(agent_id)

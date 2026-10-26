@@ -9,15 +9,95 @@ Replaces pgrep-based monitoring with a proper agent registry that tracks:
 Each agent registers itself, sends heartbeats, and coordinates via /tmp/aurum_agents.json.
 """
 
+import logging
 import os
 import subprocess
-from fastapi import APIRouter, HTTPException
+from datetime import datetime, timezone
 from typing import Dict
+
+from fastapi import APIRouter, HTTPException
 
 from api.core.config import settings
 from api.services import agent_registry
+from api.services.fleet_board import build_fleet_cards, hints_from_rows
 
 router = APIRouter(prefix="/agent", tags=["agents"])
+logger = logging.getLogger(__name__)
+
+
+def _load_hints() -> dict:
+    """Newest staged idea and armed brackets. Empty when the database is unreachable."""
+    try:
+        from sqlmodel import Session, select
+
+        from api.core.db import engine
+        from api.models.trade import ExitBracket, TradeIdea
+
+        def _iso(value):
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                if value.tzinfo is None:
+                    value = value.replace(tzinfo=timezone.utc)
+                return value.isoformat()
+            return str(value)
+
+        with Session(engine) as session:
+            trades = session.exec(
+                select(TradeIdea).order_by(TradeIdea.created_at.desc()).limit(20)  # type: ignore[attr-defined]
+            ).all()
+            brackets = session.exec(select(ExitBracket)).all()
+        trade_rows = [
+            {
+                "symbol": trade.symbol,
+                "direction": trade.direction,
+                "status": trade.status,
+                "thesis": trade.thesis,
+                "created_at": _iso(trade.created_at),
+                "updated_at": _iso(trade.updated_at),
+            }
+            for trade in trades
+        ]
+        bracket_rows = [
+            {
+                "symbol": bracket.symbol,
+                "status": bracket.status,
+                "last_trigger": bracket.last_trigger,
+                "last_checked_at": _iso(bracket.last_checked_at),
+                "updated_at": _iso(bracket.updated_at),
+            }
+            for bracket in brackets
+        ]
+        return hints_from_rows(trade_rows, bracket_rows)
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Fleet hints unavailable: %s", type(exc).__name__)
+        return {}
+
+
+@router.get("/fleet")
+async def get_fleet() -> dict:
+    """Live cards for the real Helm fleet. Read-only."""
+    now = datetime.now(timezone.utc)
+    return {
+        "paused": agent_registry.is_paused(),
+        "paper_trading": bool(settings.PAPER_TRADING),
+        "cron_enabled": bool(settings.AURUM_AGENTS_ENABLED),
+        "cards": build_fleet_cards(
+            agent_registry.get_all(),
+            agent_registry.get_activity(),
+            paused=agent_registry.is_paused(),
+            hints=_load_hints(),
+            flags={"trend_scout": bool(settings.AURUM_TREND_SCOUT)},
+            now=now,
+        ),
+    }
+
+
+@router.post("/clear/{agent_id}")
+async def clear_one(agent_id: str) -> dict:
+    """Remove one stale registry row. Does not pause, resume, or trade."""
+    removed = agent_registry.clear_agent(agent_id)
+    return {"success": True, "removed": removed, "agent_id": agent_id}
 
 
 @router.get("/", response_model=Dict[str, dict])

@@ -87,21 +87,16 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
     logger.info("Scout agent started (playbook=%s, symbols=%s, poll=%dm)", playbook_id, symbols, poll_minutes)
     
     iteration = 0
-    heartbeat_counter = 0
     
     try:
         while running:
             iteration += 1
-            heartbeat_counter += 1
-            
-            # Heartbeat every ~60s (poll loop is much longer, so we do it per iteration)
-            if heartbeat_counter >= 1:
-                agent_registry.heartbeat(AGENT_ID)
-                heartbeat_counter = 0
+            agent_registry.heartbeat(AGENT_ID)
             
             # Check global pause
             if agent_registry.is_paused():
                 logger.info("[Iter %d] Global pause active, skipping", iteration)
+                agent_registry.record_action("scout", "Paused — skipped this pass. No ideas staged.")
                 await asyncio.sleep(60)
                 continue
             
@@ -185,15 +180,24 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
                     logger.error("  %s: ERROR during auto-approve: %s", symbol, exc)
 
             logger.info("[Iter %d] Staged %d, auto-approved %d", iteration, staged_count, approved_count)
+            agent_registry.record_action(
+                "scout",
+                f"Staged {staged_count}, auto-approved {approved_count} (playbook {playbook_id}).",
+            )
+            agent_registry.record_action(
+                "recommender",
+                f"Ranked {len(recs)} setup(s) for scout.",
+            )
             
-            # Sleep until next poll
+            # Sleep until next poll, heartbeating so a long poll does not look stale.
             logger.info("[Iter %d] Sleeping for %d minutes...\n", iteration, poll_minutes)
             
-            # Sleep in chunks so we can respond to signals quickly
-            for _ in range(poll_minutes * 60):
-                if not running:
-                    break
+            slept = 0
+            while slept < poll_minutes * 60 and running:
                 await asyncio.sleep(1)
+                slept += 1
+                if slept % 60 == 0:
+                    agent_registry.heartbeat(AGENT_ID)
     
     finally:
         # Clean shutdown

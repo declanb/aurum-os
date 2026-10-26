@@ -1,5 +1,9 @@
+import logging
 from typing import Dict, Any
 from api.models.trade import TradeIdea
+
+logger = logging.getLogger(__name__)
+
 
 class GuardianService:
     @staticmethod
@@ -30,19 +34,38 @@ class GuardianService:
             issues.append("Missing invalidation notes. What proves you wrong?")
 
         if not issues:
-            return {
+            result = {
                 "passed": True,
                 "message": "Guardian analysis complete. Trade meets all structural requirements.",
                 "score": 95,
                 "feedback": "Strong setup with clear invalidation."
             }
         else:
-            return {
+            result = {
                 "passed": False,
                 "message": "Guardian identified structural concerns.",
                 "score": 40,
                 "issues": issues,
                 "feedback": "Refine your risk parameters or thesis detail before submitting for approval."
             }
+        _note_challenge(trade, result)
+        return result
+
+def _note_challenge(trade: TradeIdea, result: Dict[str, Any]) -> None:
+    """Stamp the fleet board. A registry failure must not change the verdict."""
+    try:
+        from api.services import agent_registry
+
+        symbol = getattr(trade, "symbol", None) or "idea"
+        if result.get("passed"):
+            summary = f"Passed {symbol}. Reward/risk, thesis, and invalidation are in place."
+        else:
+            issues = result.get("issues") or []
+            first = issues[0] if issues else "structural check failed"
+            summary = f"Flagged {symbol}: {first}"
+        agent_registry.record_action("guardian", summary)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Guardian activity note skipped: %s", exc)
+
 
 guardian_service = GuardianService()

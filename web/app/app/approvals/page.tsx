@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { GlassCard } from "@/components/GlassCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, CheckCircle2, XCircle, ArrowRight, ShieldCheck, RefreshCw } from "lucide-react";
+import { ShieldAlert, CheckCircle2, ArrowRight, ShieldCheck, RefreshCw } from "lucide-react";
 import { fetchTrades, processApproval, fetchApprovalEvents, executeTrade, TradeIdea } from "@/lib/api";
+import { IdeaWhy } from "@/components/IdeaWhy";
 
 export default function ApprovalsDashboard() {
     const [pendingTrades, setPendingTrades] = useState<TradeIdea[]>([]);
@@ -139,7 +140,7 @@ export default function ApprovalsDashboard() {
                     <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-end mb-4 sm:mb-6">
                         <div className="min-w-0">
                             <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Authorize Execution</h1>
-                            <p className="text-muted-foreground text-sm leading-relaxed">Review the risk parameters and narrative before signing off down-circuit.</p>
+                            <p className="text-muted-foreground text-sm leading-relaxed">Read why this idea exists, then approve it yourself. Execute stays a separate tap.</p>
                         </div>
                         {activeTrade.status === "Approved" ? (
                             <Badge className="w-fit bg-emerald-500/20 text-emerald-500 px-4 py-1.5 text-sm border-emerald-500/50">
@@ -204,20 +205,7 @@ export default function ApprovalsDashboard() {
                                     </div>
                                 </div>
 
-                                <div className="space-y-6">
-                                    <div>
-                                        <div className="text-xs font-bold uppercase text-muted-foreground mb-2">Trade Thesis</div>
-                                        <p className="text-foreground/80 text-sm leading-relaxed p-4 bg-muted/50 rounded-lg border border-border">
-                                            {activeTrade.thesis || "No thesis provided."}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <div className="text-xs font-bold uppercase text-muted-foreground mb-2">Invalidation Criteria</div>
-                                        <p className="text-muted-foreground text-sm leading-relaxed p-4 bg-muted/50 rounded-lg border border-border">
-                                            {activeTrade.invalidation_notes || "No invalidation provided."}
-                                        </p>
-                                    </div>
-                                </div>
+                                <IdeaWhy key={activeTrade.id} trade={activeTrade} />
                             </GlassCard>
 
                             <GlassCard className="p-4 sm:p-6">
