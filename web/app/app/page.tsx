@@ -295,7 +295,7 @@ export default function Dashboard() {
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant={isLong ? "default" : "destructive"} className="font-mono text-[10px]">
+                        <Badge variant={isLong ? "default" : trade.direction === "EXIT" ? "outline" : "destructive"} className="font-mono text-[10px]">
                           {trade.direction}
                         </Badge>
                         <span className="font-bold text-foreground">{trade.symbol}</span>

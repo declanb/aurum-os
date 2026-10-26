@@ -9,6 +9,7 @@ from api.routers import recommendations
 from api.routers import agent
 from api.routers import openai_balance
 from api.routers import cron
+from api.routers import exits
 
 app = FastAPI(
     title="AURUM OS API",
@@ -44,3 +45,4 @@ app.include_router(recommendations.router, prefix="/api")
 app.include_router(agent.router, prefix="/api")
 app.include_router(openai_balance.router, prefix="/api")
 app.include_router(cron.router, prefix="/api")
+app.include_router(exits.router, prefix="/api")

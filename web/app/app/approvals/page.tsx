@@ -65,7 +65,9 @@ export default function ApprovalsDashboard() {
         if (!activeTrade) return;
         setIsProcessing(true);
         try {
-            const result = await executeTrade(activeTrade.id, { quoteEur: 2.0 });
+            const isExit = activeTrade.direction === "EXIT";
+            // Exit ideas sell the bracket quantity. A quote-EUR amount would buy more.
+            const result = await executeTrade(activeTrade.id, isExit ? {} : { quoteEur: 2.0 });
             if (result && (result.ticket_status === "Filled" || result.trade_status === "Sent")) {
                 // Success
                 await loadPending();
@@ -116,7 +118,7 @@ export default function ApprovalsDashboard() {
                                 )}
                             </div>
                             <div className="flex min-w-0 items-center gap-2 text-xs">
-                                <span className={`font-bold ${trade.direction === 'LONG' ? 'text-emerald-500' : 'text-red-500'}`}>{trade.direction}</span>
+                                <span className={`font-bold ${trade.direction === 'LONG' ? 'text-emerald-500' : trade.direction === 'EXIT' ? 'text-amber-500' : 'text-red-500'}`}>{trade.direction}</span>
                                 <span className="text-muted-foreground">@ {trade.entry_price}</span>
                             </div>
                         </button>
@@ -157,23 +159,35 @@ export default function ApprovalsDashboard() {
                                     <div>
                                         <h2 className="text-2xl font-bold text-foreground mb-1">{activeTrade.symbol}</h2>
                                         <div className="flex items-center gap-3 mt-2">
-                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${activeTrade.direction === 'LONG' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
+                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${activeTrade.direction === 'LONG' ? 'bg-emerald-500/20 text-emerald-500' : activeTrade.direction === 'EXIT' ? 'bg-amber-500/20 text-amber-500' : 'bg-red-500/20 text-red-500'}`}>
                                                 {activeTrade.direction}
                                             </span>
-                                            <span className="text-muted-foreground text-sm">via Primary Terminal</span>
+                                            <span className="text-muted-foreground text-sm">
+                                                {activeTrade.direction === "EXIT" ? "spot sell to close" : "via Primary Terminal"}
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-sm text-muted-foreground mb-1">R:R Profile</div>
                                         <div className="text-xl font-bold text-foreground">
-                                            {((Math.abs(activeTrade.target_price - activeTrade.entry_price) / Math.abs(activeTrade.entry_price - activeTrade.stop_price)) || 0).toFixed(2)}
+                                            {(() => {
+                                                const risk = Math.abs(activeTrade.entry_price - activeTrade.stop_price);
+                                                const reward = Math.abs(activeTrade.target_price - activeTrade.entry_price);
+                                                return risk > 0 ? (reward / risk).toFixed(2) : "—";
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
 
+                                {activeTrade.direction === "EXIT" && (
+                                    <p className="mb-4 text-sm text-amber-500/90">
+                                        This closes a spot long. Approving does not send an order. Execute sells the bracket quantity at market.
+                                    </p>
+                                )}
+
                                 <div className="grid grid-cols-3 gap-4 mb-8">
                                     <div className="p-4 bg-muted rounded-lg border border-border">
-                                        <div className="text-xs text-muted-foreground mb-1">Entry</div>
+                                        <div className="text-xs text-muted-foreground mb-1">{activeTrade.direction === "EXIT" ? "Signal bid" : "Entry"}</div>
                                         <div className="text-lg font-mono text-foreground">{activeTrade.entry_price}</div>
                                     </div>
                                     <div className="p-4 bg-muted rounded-lg border border-border">
@@ -272,7 +286,7 @@ export default function ApprovalsDashboard() {
                                             ) : (
                                                 <ArrowRight className="w-4 h-4 mr-2" />
                                             )}
-                                            Send to Execution Matrix
+                                            {activeTrade.direction === "EXIT" ? "Sell spot long at market" : "Send to Execution Matrix"}
                                         </Button>
                                     </div>
                                 )}

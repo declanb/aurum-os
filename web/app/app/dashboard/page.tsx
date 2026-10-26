@@ -6,6 +6,7 @@ import { AiRecommendations } from "@/components/AiRecommendations";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Activity, Zap, DollarSign, Target } from "lucide-react";
+import { exitStatusLabel, ExitBracketResponse } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const [account, setAccount] = useState<AccountData | null>(null);
   const [position, setPosition] = useState<Position | null>(null);
   const [agentStatus, setAgentStatus] = useState<string>("checking...");
+  const [exits, setExits] = useState<ExitBracketResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,15 +44,26 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
-      // Fetch account
-      const accRes = await fetch(`${API_URL}/revolut-x/account`);
+      const [accRes, exitsRes, agentRes] = await Promise.all([
+        fetch(`${API_URL}/revolut-x/account`),
+        fetch(`${API_URL}/exits`),
+        fetch(`${API_URL}/agent/profit-hunter/status`),
+      ]);
       const accData = await accRes.json();
       setAccount(accData);
+      if (exitsRes.ok) {
+        setExits(await exitsRes.json());
+      }
+      if (agentRes.ok) {
+        const agentData = await agentRes.json();
+        setAgentStatus(agentData.running ? "running" : "stopped");
+      } else {
+        setAgentStatus("unknown");
+      }
 
-      // Calculate position P&L if holding BTC
-      const btcBal = accData.balances.find((b: Balance) => b.currency === "BTC");
+      // Calculate position P&L if holding BTC. Ticker depends on the balance.
+      const btcBal = accData.balances?.find((b: Balance) => b.currency === "BTC");
       if (btcBal && btcBal.balance > 0) {
-        // Fetch current ticker
         const tickerRes = await fetch(`${API_URL}/revolut-x/tickers?symbols=BTC-EUR`);
         const tickerData = await tickerRes.json();
         const bid = tickerData[0]?.bid || 0;
@@ -75,8 +88,6 @@ export default function Dashboard() {
         setPosition(null);
       }
 
-      // Check agent status by reading log (simplified)
-      checkAgentStatus();
       setLoading(false);
     } catch (err) {
       console.error("Dashboard load failed:", err);
@@ -84,20 +95,13 @@ export default function Dashboard() {
     }
   };
 
-  const checkAgentStatus = async () => {
-    try {
-      const res = await fetch(`${API_URL}/agent/profit-hunter/status`);
-      const data = await res.json();
-      setAgentStatus(data.running ? "running" : "stopped");
-    } catch (err) {
-      console.error("Agent status check failed:", err);
-      setAgentStatus("unknown");
-    }
-  };
-
-  const eurBalance = account?.balances.find((b) => b.currency === "EUR")?.balance || 0;
-  const btcBalance = account?.balances.find((b) => b.currency === "BTC")?.balance || 0;
+  const eurBalance = account?.balances?.find((b) => b.currency === "EUR")?.balance || 0;
+  const btcBalance = account?.balances?.find((b) => b.currency === "BTC")?.balance || 0;
   const totalValue = eurBalance + (position ? position.qty * position.current_bid : 0);
+  const openBrackets = (exits?.brackets ?? []).filter((b) =>
+    ["armed", "exit_proposed", "closing"].includes(b.status),
+  );
+  const btcBracket = openBrackets.find((b) => b.symbol === "BTC-EUR");
 
   if (loading) {
     return (
@@ -177,15 +181,14 @@ export default function Dashboard() {
             <div className="p-2 rounded-lg bg-violet-500/10">
               <Activity className="w-5 h-5 text-violet-500" />
             </div>
-            <h3 className="font-semibold text-foreground">Profit Hunter</h3>
+            <h3 className="font-semibold text-foreground">Helm exits</h3>
           </div>
-          <div className="text-3xl font-bold text-foreground">
-            {position ? "Active" : "Idle"}
-          </div>
+          <div className="text-3xl font-bold text-foreground">{openBrackets.length}</div>
           <p className="text-xs text-muted-foreground mt-1">
-            {position
-              ? "Monitoring for 2.5% profit (€0.05)"
-              : "No position to monitor"}
+            {exits?.live_exit === "paper_auto"
+              ? "Paper mode simulates the sell"
+              : "Live sells wait for approval"}
+            {agentStatus === "running" ? " · hunter process up" : ""}
           </p>
         </GlassCard>
       </div>
@@ -215,20 +218,27 @@ export default function Dashboard() {
               <p className="text-sm font-bold">€{position.current_bid.toLocaleString()}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Target</p>
-              <p className="text-sm font-bold text-emerald-500">
-                €{(position.cost_eur + 0.05).toFixed(2)}
+              <p className="text-xs text-muted-foreground mb-1">Stop / target</p>
+              <p className="text-sm font-bold">
+                {btcBracket ? (
+                  <>
+                    <span className="text-rose-500">{btcBracket.stop_price}</span>
+                    {" / "}
+                    <span className="text-emerald-500">{btcBracket.target_price}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">No bracket</span>
+                )}
               </p>
             </div>
           </div>
           <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border">
             <p className="text-xs text-muted-foreground">
-              <strong>Profit Hunter:</strong> Monitoring every 10s. Will auto-sell at market when
-              P&L reaches €0.05 (2.5% profit). Check{" "}
-              <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                tail -f /tmp/profit_hunter.log
-              </code>{" "}
-              for live updates.
+              <strong>Helm bracket:</strong>{" "}
+              {btcBracket
+                ? `${exitStatusLabel(btcBracket.status)}${btcBracket.trail_armed ? " · trailing" : ""}${btcBracket.exit_reason ? ` · ${btcBracket.exit_reason}` : ""}. `
+                : "Not armed for this balance. "}
+              Live mode proposes an EXIT idea. It does not market-sell until you approve and execute.
             </p>
           </div>
         </GlassCard>
