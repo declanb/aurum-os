@@ -163,6 +163,7 @@ def test_advisor_attaches_explicit_context_without_a_network_load(monkeypatch):
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "")
     monkeypatch.setattr(settings, "GITHUB_TOKEN", "")
     monkeypatch.setattr(settings, "AURUM_TREND_CONTEXT", False)
+    monkeypatch.setattr(settings, "AURUM_TREND_SCOUT", False)
 
     async def boom():
         raise AssertionError("trend load should not run when context is provided")
@@ -186,6 +187,7 @@ def test_advisor_skips_trend_load_when_flag_off(monkeypatch):
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "")
     monkeypatch.setattr(settings, "GITHUB_TOKEN", "")
     monkeypatch.setattr(settings, "AURUM_TREND_CONTEXT", False)
+    monkeypatch.setattr(settings, "AURUM_TREND_SCOUT", False)
     called = {"n": 0}
 
     async def boom():
@@ -251,7 +253,7 @@ def test_copilot_files_keep_hitl_rails():
         "ExecutionTicket",
         "AURUM_AGENTS_PAUSED",
         "AUTO_APPROVE_MAX_PER_DAY",
-        "real money",
+        "real funds",
         "profit_hunter",
     ):
         assert phrase in instructions

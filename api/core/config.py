@@ -45,12 +45,20 @@ class Settings(BaseSettings):
     # OpenAI's Responses API and does NOT use the GitHub Models fallback.
     AURUM_USE_AGENTS_SDK: bool = False
 
-    # ── Public trend context (read-only; advisory prompt input) ──────────────
-    # When set, ai_advisor loads CoinGecko / Fear & Greed / headlines (and X
-    # recent search if X_BEARER_TOKEN is set) and attaches them to the prompt.
-    # The token itself is read from the environment inside trend_context.py and
-    # is intentionally not a Settings field, so it is never repr'd with config.
-    # This flag does not place orders. Recommendations still end at TradeIdea.
+    # ── trend_scout (read-only SignalBundles; never places orders) ───────────
+    # Off by default. When on, ai_advisor may attach untrusted public-trend context.
+    # AURUM_TREND_SCOUT_NETWORK=1 fetches the allowlisted RSS feeds. X/Twitter is
+    # queried only when X_BEARER_TOKEN is also set. See docs/HELM_AGENT_FLEET.md.
+    AURUM_TREND_SCOUT: bool = False
+    AURUM_TREND_SCOUT_NETWORK: bool = False
+    X_BEARER_TOKEN: str = ""
+
+    # ── Public regime context (read-only; advisory prompt input) ─────────────
+    # Separate from trend_scout. When set, ai_advisor loads CoinGecko / Fear &
+    # Greed / headlines (and X recent search if X_BEARER_TOKEN is set) and
+    # attaches them to the prompt. This flag does not place orders.
+    # Recommendations still end at a TradeIdea.
+    # trend_context.py reads the bearer from the environment and must not log it.
     AURUM_TREND_CONTEXT: bool = False
     X_TREND_QUERY: str = "(bitcoin OR ethereum OR solana) lang:en -is:retweet"
 

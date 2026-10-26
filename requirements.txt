@@ -5,6 +5,9 @@ pydantic-settings>=2.0.3
 sqlmodel>=0.0.14
 alembic>=1.12.1
 psycopg2-binary>=2.9.9
+# psycopg v3. SQLAlchemy 2.1's postgresql:// URL (and postgresql+psycopg://)
+# imports this module. The binary extra ships libpq wheels for Vercel.
+psycopg[binary]>=3.2.0
 httpx>=0.27.0
 openai>=1.0.0
 openai-agents>=0.24.0

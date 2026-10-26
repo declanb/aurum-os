@@ -17,6 +17,9 @@
 After deploy, go to **Vercel Dashboard → Settings → Environment Variables** and add:
 
 ### Required
+
+`postgresql://` and `postgresql+psycopg://` both use the psycopg v3 driver (`psycopg[binary]` in the root `requirements.txt`, which `@vercel/python` installs for `api/index.py`). SQLAlchemy 2.1 selects that dialect for a bare `postgresql://` URL. `postgresql+psycopg2://` selects the legacy `psycopg2` driver.
+
 ```
 DATABASE_URL=postgresql://<user>:<password>@<host>:5432/postgres?sslmode=require
 OPENAI_API_KEY=sk-proj-...            # your real key (set in Vercel env, never commit)

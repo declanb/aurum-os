@@ -1,8 +1,16 @@
-# Aurum Agent Fleet
+# Helm agent fleet
 
-Product brand: **Helm**. The git repo and code identifiers stay `aurum-os`.
+**Helm** is the product: a discretionary, human-in-the-loop crypto trading copilot. This repository is `aurum-os`. Process names, `/tmp/aurum_agents.json`, env prefixes (`AURUM_*`), and package paths still use Aurum identifiers.
 
-Aurum runs multiple autonomous agents that coordinate via a shared registry. Each agent handles one concern and registers itself so others can see what's running. The Revolut X account behind this stack is live — recommendations can be staged, and only a human Execute click sends an order.
+Helm is connected to a **live Revolut X spot account (real funds)**. Agents may recommend and stage trades for human review only. Never place, cancel, or modify a Revolut X order unless a human has recorded an `ApprovalEvent` and clicked execute. Path: `TradeIdea` → Approvals UI → human execute → broker. Auto-approve is not auto-execute. Spot only — no shorts, leverage, or perps. Keep the daily cap, pause flag, and kill switch.
+
+The fleet coordinates through a shared registry. Each process handles one concern and registers itself so the others can see what is running.
+
+The Helm recommendation path (signal → idea → human execute → exit), the `SignalBundle` / `TradeIdea` contracts, and the Revolut rules are in [docs/HELM_AGENT_FLEET.md](docs/HELM_AGENT_FLEET.md).
+
+`trend_scout` is read-only and **off by default** (`AURUM_TREND_SCOUT=0`). It does not call the broker. Set `AURUM_TREND_SCOUT=1` to let `ai_advisor` attach untrusted SignalBundles as context. `AURUM_TREND_SCOUT_NETWORK=1` turns on allowlisted public feeds; otherwise the bundles are fixtures. Orders still need an `ApprovalEvent` and a human execute click.
+
+A separate read, also off by default, is `AURUM_TREND_CONTEXT` (`api/services/trend_context.py`): public regime numbers for the same advisor prompt. The Copilot agent **Revolut X Trend Expert** (section 3) is advisory-only. Neither places an order.
 
 ## Architecture
 
@@ -27,6 +35,8 @@ Aurum runs multiple autonomous agents that coordinate via a shared registry. Eac
 Shared coordination:  /tmp/aurum_agents.json
 ```
 
+The manual click is the entry path onto Revolut X. `profit_hunter` (detailed below) is an exit watcher; do not add new unattended place, cancel, or modify behavior, and do not drop the `ApprovalEvent` gate on execute.
+
 ## Current Agents
 
 ### 1. scout_agent
@@ -37,7 +47,7 @@ Shared coordination:  /tmp/aurum_agents.json
 
 **What it does:**
 - Every 15 minutes:
-  1. Fetches AI recommendations via `ai_advisor` (using your selected playbook). When `AURUM_TREND_CONTEXT=1`, the prompt also includes public trend context (see below). That context does not place an order.
+  1. Fetches AI recommendations via `ai_advisor` (using your selected playbook). Optional read-only context: `AURUM_TREND_SCOUT` (SignalBundles, see the fleet doc) and `AURUM_TREND_CONTEXT` (public regime numbers, see below). Neither places an order.
   2. Computes your personal edge from approved-trade history
   3. Scores each recommendation against thresholds
   4. Auto-approves winners (if not already claimed by profit_hunter)
@@ -108,10 +118,12 @@ Not a long-running process. This is a user-invocable GitHub Copilot custom agent
 
 It does not write code and does not place, cancel, or modify orders. Hand the read to a human or let scout stage a `TradeIdea`. Trading Guru stays the voice for discipline and "should I take this?" questions.
 
+This is not `trend_scout`. SignalBundles stay on `AURUM_TREND_SCOUT` and are specified in `docs/HELM_AGENT_FLEET.md`. The expert and `trend_context` add a regime read beside that.
+
 **Signal flow** (`AURUM_TREND_CONTEXT=1`, off by default):
 
 1. `api/services/trend_context.py` reads public sources only: CoinGecko `/global`, alternative.me Fear & Greed, CoinDesk RSS, and X API v2 recent search when `X_BEARER_TOKEN` is set. GET only. No posting. Missing fields are omitted.
-2. `ai_advisor.generate_recommendations` puts that block in the Chat Completions prompt and, when `AURUM_USE_AGENTS_SDK=1`, in the OpenAI Agents advisor instructions.
+2. `ai_advisor.generate_recommendations` puts that block in the Chat Completions prompt and, when `AURUM_USE_AGENTS_SDK=1`, in the OpenAI Agents advisor instructions, next to any SignalBundle block.
 3. Scout (`scout_agent` and `GET /api/cron/scout`) and `GET /api/recommendations/?include_trends=true` use the same function.
 4. Output is a recommendation. Scout may stage a `TradeIdea` on the Approvals queue (thesis gains a `Regime risk_on|risk_off|unclear` suffix). Auto-approve may mark it Approved. An `ExecutionTicket` is created only after an `ApprovalEvent` and a human Execute click.
 

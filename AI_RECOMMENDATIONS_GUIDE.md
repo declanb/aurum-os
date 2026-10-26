@@ -233,7 +233,10 @@ To minimize costs:
 
 ## Public trend context (optional)
 
-Set `AURUM_TREND_CONTEXT=1` to attach a read-only public scan to each recommendation: CoinGecko BTC dominance and 24h market-cap change, the alternative.me Fear & Greed index, and CoinDesk headlines. Add a read-only `X_BEARER_TOKEN` if you also want X API v2 recent search. Leave the token empty to skip X. The loader never posts and never logs the token.
+Two read-only inputs, both off by default, neither of which places an order:
+
+- `AURUM_TREND_SCOUT` attaches untrusted SignalBundles. Contract: `docs/HELM_AGENT_FLEET.md`.
+- `AURUM_TREND_CONTEXT=1` attaches a public regime scan: CoinGecko BTC dominance and 24h market-cap change, the alternative.me Fear & Greed index, and CoinDesk headlines. Add a read-only `X_BEARER_TOKEN` if you also want X API v2 recent search. Leave the token empty to skip X. The loader never posts and never logs the token.
 
 Ask for the same read in Copilot Chat by selecting the **Revolut X Trend Expert** agent (`.github/agents/revolut-x-trend-expert.agent.md`). That agent does not write code or place orders.
 
