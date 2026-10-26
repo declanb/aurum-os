@@ -56,16 +56,23 @@ export type TradeIdea = {
     user_id: string;
 };
 
-export async function fetchTrades(status?: string): Promise<TradeIdea[]> {
+export async function fetchTradesResult(status?: string): Promise<{ trades: TradeIdea[]; error: string | null }> {
     try {
-        const url = status ? `${API_URL}/trades/?status=${status}` : `${API_URL}/trades/`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch trades");
-        return res.json();
+        const url = status ? `${API_URL}/trades/?status=${encodeURIComponent(status)}` : `${API_URL}/trades/`;
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return { trades: [], error: "Could not load trade ideas" };
+        const data = await res.json();
+        if (!Array.isArray(data)) return { trades: [], error: "Could not load trade ideas" };
+        return { trades: data as TradeIdea[], error: null };
     } catch (error) {
         console.error(error);
-        return [];
+        return { trades: [], error: "Could not load trade ideas" };
     }
+}
+
+export async function fetchTrades(status?: string): Promise<TradeIdea[]> {
+    const result = await fetchTradesResult(status);
+    return result.trades;
 }
 
 export async function createTrade(data: Partial<TradeIdea>): Promise<TradeIdea | null> {
