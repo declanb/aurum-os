@@ -5,7 +5,7 @@ import { fetchTrades, fetchRxAccount, fetchTickers, fetchOpenAIBalance, type Tra
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, AlertCircle, CheckCircle2, Clock, ArrowRight, RefreshCw, Sparkles, Bot, Activity } from "lucide-react";
+import { TrendingUp, AlertCircle, CheckCircle2, Clock, ArrowRight, RefreshCw, Sparkles, Bot } from "lucide-react";
 import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
@@ -43,7 +43,7 @@ export default function Dashboard() {
         if (agentRes.ok) {
           setAgentStatus(await agentRes.json());
         }
-      } catch (e) {
+      } catch {
         // Agent endpoint unavailable
       }
 

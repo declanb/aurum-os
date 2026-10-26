@@ -4,28 +4,32 @@ import { useState, useEffect } from "react";
 import { GlassCard } from "@/components/GlassCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fetchTrades, fetchJournalEntries, fetchTradeVersions, TradeIdea } from "@/lib/api";
-import { BookOpen, Calendar, ChevronRight, Activity, TrendingUp, TrendingDown, AlignLeft } from "lucide-react";
+import { fetchTrades, fetchTradeVersions, TradeIdea, TradeVersion } from "@/lib/api";
+import { BookOpen, Calendar, Activity, TrendingUp, TrendingDown, AlignLeft } from "lucide-react";
 
 export default function JournalDashboard() {
     const [completedTrades, setCompletedTrades] = useState<TradeIdea[]>([]);
     const [activeTrade, setActiveTrade] = useState<TradeIdea | null>(null);
-    const [versions, setVersions] = useState<any[]>([]);
-    const [journalEntries, setJournalEntries] = useState<any[]>([]);
+    const [versions, setVersions] = useState<TradeVersion[]>([]);
 
     useEffect(() => {
-        loadData();
+        let cancelled = false;
+        const loadData = async () => {
+            const trades = await fetchTrades();
+            const completed = trades.filter(t => ["Sent", "Closed", "Cancelled"].includes(t.status));
+            if (cancelled) return;
+            setCompletedTrades(completed);
+
+            if (completed.length > 0) {
+                const initialTrade = completed[0];
+                setActiveTrade(initialTrade);
+                const tradeVersions = await fetchTradeVersions(initialTrade.id);
+                if (!cancelled) setVersions(tradeVersions);
+            }
+        };
+        void loadData();
+        return () => { cancelled = true; };
     }, []);
-
-    const loadData = async () => {
-        const trades = await fetchTrades();
-        const completed = trades.filter(t => ["Sent", "Closed", "Cancelled"].includes(t.status));
-        setCompletedTrades(completed);
-
-        if (completed.length > 0) {
-            handleSelectTrade(completed[0]);
-        }
-    };
 
     const handleSelectTrade = async (trade: TradeIdea) => {
         setActiveTrade(trade);

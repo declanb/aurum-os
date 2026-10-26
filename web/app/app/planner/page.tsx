@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Save, Bot, Compass, ArrowRight, XCircle, FilePlus, ChevronRight, CheckCircle, AlertTriangle, RefreshCw } from "lucide-react";
-import { fetchTrades, createTrade, updateTrade, challengeTrade, TradeIdea } from "@/lib/api";
+import { fetchTrades, createTrade, updateTrade, challengeTrade, TradeIdea, GuardianChallengeResult } from "@/lib/api";
 
 export default function TradePlanner() {
     const [trades, setTrades] = useState<TradeIdea[]>([]);
@@ -19,10 +19,14 @@ export default function TradePlanner() {
     });
     const [isSaving, setIsSaving] = useState(false);
     const [isChallenging, setIsChallenging] = useState(false);
-    const [guardianResult, setGuardianResult] = useState<any>(null);
+    const [guardianResult, setGuardianResult] = useState<GuardianChallengeResult | null>(null);
 
     useEffect(() => {
-        loadTrades();
+        let cancelled = false;
+        fetchTrades().then(data => {
+            if (!cancelled) setTrades(data);
+        });
+        return () => { cancelled = true; };
     }, []);
 
     const loadTrades = async () => {
@@ -200,7 +204,7 @@ export default function TradePlanner() {
                                 </div>
                             </div>
                             <div>
-                                <Label className="text-muted-foreground mb-2 block">Target</Label>
+                                <Label className="muted-foreground mb-2 block">Target</Label>
                                 <div className="relative">
                                     <ArrowRight className="w-4 h-4 text-emerald-500/50 absolute left-3 top-1/2 -translate-y-1/2" />
                                     <Input

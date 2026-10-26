@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { GlassCard } from "@/components/GlassCard";
 import { AiRecommendations } from "@/components/AiRecommendations";
 import { Badge } from "@/components/ui/badge";
@@ -31,16 +31,9 @@ interface Position {
 export default function Dashboard() {
   const [account, setAccount] = useState<AccountData | null>(null);
   const [position, setPosition] = useState<Position | null>(null);
-  const [agentStatus, setAgentStatus] = useState<string>("checking...");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5000); // Refresh every 5s
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       // Fetch account
       const accRes = await fetch(`${API_URL}/revolut-x/account`);
@@ -75,25 +68,21 @@ export default function Dashboard() {
         setPosition(null);
       }
 
-      // Check agent status by reading log (simplified)
-      checkAgentStatus();
       setLoading(false);
     } catch (err) {
       console.error("Dashboard load failed:", err);
       setLoading(false);
     }
-  };
+  }, []);
 
-  const checkAgentStatus = async () => {
-    try {
-      const res = await fetch(`${API_URL}/agent/profit-hunter/status`);
-      const data = await res.json();
-      setAgentStatus(data.running ? "running" : "stopped");
-    } catch (err) {
-      console.error("Agent status check failed:", err);
-      setAgentStatus("unknown");
-    }
-  };
+  useEffect(() => {
+    const initialLoad = setTimeout(() => void loadData(), 0);
+    const interval = setInterval(() => void loadData(), 5000);
+    return () => {
+      clearTimeout(initialLoad);
+      clearInterval(interval);
+    };
+  }, [loadData]);
 
   const eurBalance = account?.balances.find((b) => b.currency === "EUR")?.balance || 0;
   const btcBalance = account?.balances.find((b) => b.currency === "BTC")?.balance || 0;

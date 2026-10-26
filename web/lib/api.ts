@@ -1,6 +1,65 @@
 // Create an API service for frontend data fetching
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
+export type GuardianChallengeResult = {
+    passed: boolean;
+    score: number;
+    message: string;
+    issues: string[];
+};
+
+export type ApprovalEvent = {
+    id: number;
+    trade_idea_id: number;
+    version_id: number;
+    user_id: string;
+    snapshot_hash: string;
+    timestamp: string;
+};
+
+export type TradeVersion = {
+    id: number;
+    trade_idea_id: number;
+    version_number: number;
+    symbol: string;
+    direction: string;
+    entry_price: number;
+    stop_price: number;
+    target_price: number;
+    thesis: string;
+    invalidation_notes?: string | null;
+    created_at: string;
+};
+
+export type JournalEntry = {
+    id: number;
+    user_id: string;
+    trade_idea_id: number | null;
+    expected_behaviour: string | null;
+    actual_behaviour: string | null;
+    thesis_validity: string | null;
+    should_have_skipped: boolean;
+    lesson_learned: string | null;
+    created_at: string;
+};
+
+export type JournalEntryInput = {
+    trade_idea_id: number;
+    content: string;
+    mistakes_made?: string;
+    lessons_learned?: string;
+    execution_rating?: number;
+};
+
+export type JournalEntryResult = { status: string; id: number };
+
+export type ExecuteTradeResult = {
+    ticket_status?: string;
+    trade_status?: string;
+    execution?: { message?: string } | null;
+    message?: string;
+};
+
 type MarketNote = {
     id: number;
     symbol: string;
@@ -180,7 +239,7 @@ export async function fetchRecommendations(
     }
 }
 
-export async function challengeTrade(id: number): Promise<any | null> {
+export async function challengeTrade(id: number): Promise<GuardianChallengeResult | null> {
     try {
         const res = await fetch(`${API_URL}/trades/${id}/challenge`, {
             method: "POST",
@@ -208,7 +267,7 @@ export async function processApproval(tradeId: number, action: "APPROVE" | "REJE
     }
 }
 
-export async function fetchApprovalEvents(tradeId: number): Promise<any[]> {
+export async function fetchApprovalEvents(tradeId: number): Promise<ApprovalEvent[]> {
     try {
         const res = await fetch(`${API_URL}/approvals/events/${tradeId}`);
         if (!res.ok) throw new Error("Failed to fetch approval events");
@@ -219,7 +278,7 @@ export async function fetchApprovalEvents(tradeId: number): Promise<any[]> {
     }
 }
 
-export async function fetchTradeVersions(tradeId: number): Promise<any[]> {
+export async function fetchTradeVersions(tradeId: number): Promise<TradeVersion[]> {
     try {
         const res = await fetch(`${API_URL}/journal/versions/${tradeId}`);
         if (!res.ok) throw new Error("Failed to fetch versions");
@@ -230,7 +289,7 @@ export async function fetchTradeVersions(tradeId: number): Promise<any[]> {
     }
 }
 
-export async function fetchJournalEntries(): Promise<any[]> {
+export async function fetchJournalEntries(): Promise<JournalEntry[]> {
     try {
         const res = await fetch(`${API_URL}/journal/`);
         if (!res.ok) throw new Error("Failed to fetch journal entries");
@@ -241,7 +300,7 @@ export async function fetchJournalEntries(): Promise<any[]> {
     }
 }
 
-export async function createJournalEntry(data: any): Promise<any | null> {
+export async function createJournalEntry(data: JournalEntryInput): Promise<JournalEntryResult | null> {
     try {
         const res = await fetch(`${API_URL}/journal/`, {
             method: "POST",
@@ -373,7 +432,7 @@ export async function fetchOpenAIBalance(): Promise<OpenAIBalance | null> {
 export async function executeTrade(
     tradeId: number,
     opts: { volume?: number; quoteEur?: number } = {},
-): Promise<any | null> {
+): Promise<ExecuteTradeResult> {
     try {
         const body: Record<string, unknown> = { use_market: true };
         if (opts.quoteEur !== undefined) {
