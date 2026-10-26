@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Helm profit notifications: one in-app ping when a live spot long first turns green, again when a take-profit EXIT idea is waiting, and again when a profitable exit fills. Deduped per position. Shown in the phone shell (badge and banner). `GET /api/notifications/events?since_id=` is the read-only cursor for a room bot. No broker sell is sent from a ping. See `docs/helm-exit-brackets.md`.
 - Helm exit brackets: hard stop, take-profit, and a 1R / 0.25R trailing ratchet for filled spot longs. Revolut X still has no native SL/TP. Live triggers become an `EXIT` idea that needs approval before a market sell. `PAPER_TRADING=1` simulates that sell. See `docs/helm-exit-brackets.md`.
 
 ## [1.0.0] - 2026-06-05

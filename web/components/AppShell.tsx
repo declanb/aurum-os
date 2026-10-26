@@ -17,6 +17,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BalancePill } from "@/components/BalancePill";
 import { PaperModePill } from "@/components/PaperModePill";
+import { ProfitBanner, ProfitBell, ProfitNotificationProvider, ProfitSheet } from "@/components/ProfitNotifications";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -60,6 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     return (
+        <ProfitNotificationProvider>
         <div className="flex h-dvh bg-background overflow-hidden">
             <aside className="hidden md:flex w-16 border-r border-border bg-card flex-col items-center py-3 shrink-0">
                 <Link
@@ -119,6 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             </span>
                         </div>
                         <ThemeToggle />
+                        <ProfitBell />
                         <div className="hidden sm:flex w-9 h-9 rounded-full bg-muted border border-border items-center justify-center text-xs font-bold text-foreground">
                             DB
                         </div>
@@ -126,6 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </header>
 
                 <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-8 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-6 lg:pb-8">
+                    <ProfitBanner />
                     {children}
                 </div>
             </main>
@@ -199,6 +203,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </button>
                 </div>
             </nav>
+            <ProfitSheet />
         </div>
+        </ProfitNotificationProvider>
     );
 }

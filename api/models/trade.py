@@ -85,3 +85,28 @@ class ExitBracket(SQLModel, table=True):
     closed_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ProfitNotification(SQLModel, table=True):
+    """One Helm profit ping. ``dedupe_key`` is unique so polls do not spam.
+
+    Keys (see ``api.services.profit_notifications``):
+    ``in_profit:{position}`` once when unrealised PnL first goes positive,
+    ``take_profit:idea:{id}`` once per take-profit EXIT idea,
+    ``exit_filled:bracket:{id}`` once when that bracket's exit fill is profitable.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dedupe_key: str = Field(unique=True, index=True)
+    kind: str = Field(index=True)  # in_profit | take_profit | exit_filled
+    symbol: str = Field(index=True)
+    position_key: str = Field(index=True)
+    pnl_eur: Optional[float] = None
+    pnl_pct: Optional[float] = None
+    qty: Optional[float] = None
+    entry_price: Optional[float] = None
+    mark_price: Optional[float] = None
+    title: str
+    body: str
+    read_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

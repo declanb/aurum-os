@@ -207,8 +207,9 @@ async def hunt_tick(authorization: Optional[str] = Header(None)):
     broker order. Paper mode (PAPER_TRADING=1) auto-approves and simulates
     the sell. Still gated by AURUM_AGENTS_ENABLED.
 
-    Triggered by Vercel cron every 2 minutes.
-    Cost: ~$0.50/month Vercel compute (no LLM calls).
+    The same tick records Helm profit notifications (first green, take-profit
+    waiting, profitable fill). Those rows are not broker orders. On Vercel
+    Hobby this cron runs once a day; the open app also scans while it is on screen.
     """
     _verify_cron_secret(authorization)
 
@@ -217,8 +218,16 @@ async def hunt_tick(authorization: Optional[str] = Header(None)):
         return {"status": "disabled", "reason": "AURUM_AGENTS_ENABLED=false"}
 
     # Same pause flag as scout. A paused fleet must not even propose exits.
+    # Profit pings are a separate read: they do not propose or send a sell.
     if agent_registry.is_paused():
-        return {"status": "paused", "reason": "AURUM_AGENTS_PAUSED or registry pause"}
+        profit = {"created": 0, "source": "rate_limited"}
+        if _check_rate_limit("hunt_profit", 110):
+            profit = await _record_profit_notifications()
+        return {
+            "status": "paused",
+            "reason": "AURUM_AGENTS_PAUSED or registry pause",
+            "profit_notifications": profit,
+        }
 
     # Rate limit
     if not _check_rate_limit("hunt", min_interval_seconds=110):  # 110s min
@@ -251,6 +260,8 @@ async def hunt_tick(authorization: Optional[str] = Header(None)):
             continue
         bids[symbol] = bid
 
+    summary = None
+    monitor_error = None
     try:
         with Session(engine) as session:
             summary = await monitor_brackets(
@@ -260,18 +271,39 @@ async def hunt_tick(authorization: Optional[str] = Header(None)):
             )
     except Exception as exc:
         logger.error("Exit monitor failed: %s", exc)
-        return {"status": "error", "reason": str(exc)}
+        monitor_error = str(exc)
+
+    profit = await _record_profit_notifications(bids)
+    if monitor_error or summary is None:
+        return {"status": "error", "reason": monitor_error or "exit monitor failed", "profit_notifications": profit}
 
     logger.info(
-        "Hunt mode=%s checked=%s proposed=%s paper_closed=%s broker_orders=%s",
+        "Hunt mode=%s checked=%s proposed=%s paper_closed=%s broker_orders=%s profit_pings=%s",
         summary["mode"],
         summary["checked"],
         len(summary["proposed"]),
         len(summary["paper_closed"]),
         summary["broker_orders_placed"],
+        profit.get("created"),
     )
     return {
         "status": "success",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "profit_notifications": profit,
         **summary,
     }
+
+
+async def _record_profit_notifications(bids: Optional[dict] = None) -> dict:
+    """Persist Helm profit pings from live holdings or the bids already fetched.
+
+    Never places, cancels, or modifies a broker order.
+    """
+    from api.services.profit_notifications import scan_profits
+
+    try:
+        with Session(engine) as session:
+            return await scan_profits(session, bids=bids)
+    except Exception as exc:
+        logger.warning("Profit notification scan failed: %s", type(exc).__name__)
+        return {"created": 0, "source": "error"}
