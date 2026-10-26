@@ -204,7 +204,7 @@ export default function TradePlanner() {
                                 </div>
                             </div>
                             <div>
-                                <Label className="muted-foreground mb-2 block">Target</Label>
+                                <Label className="text-muted-foreground mb-2 block">Target</Label>
                                 <div className="relative">
                                     <ArrowRight className="w-4 h-4 text-emerald-500/50 absolute left-3 top-1/2 -translate-y-1/2" />
                                     <Input
