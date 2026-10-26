@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Zap, ShieldCheck, TrendingUp, Clock } from "lucide-react";
 import Link from "next/link";
@@ -82,7 +81,7 @@ export function ActionCommand({ pendingApprovals, activeTrades, onQuickTrade }: 
         <div className="relative z-10">
           <div className="flex items-start justify-between mb-4">
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Clock className="w-6 h-6 text-blue-500" />
+              <Clock className="w-5 h-5 text-blue-500" />
             </div>
           </div>
           <h3 className="text-xl font-bold text-foreground mb-2">Market Notes</h3>

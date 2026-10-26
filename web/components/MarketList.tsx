@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { TrendingUp, TrendingDown, Search } from "lucide-react";
 import type { RxTicker } from "@/lib/api";
 
@@ -8,6 +8,7 @@ interface MarketListProps {
   selectedSymbol: string;
   onSelect: (symbol: string) => void;
   tickers: RxTicker[];
+  sessionStats: Record<string, { high: number; low: number; open: number }>;
 }
 
 const NAME_MAP: Record<string, string> = {
@@ -23,20 +24,11 @@ const NAME_MAP: Record<string, string> = {
   "MATIC/USD": "Polygon",
 };
 
-export function MarketList({ selectedSymbol, onSelect, tickers }: MarketListProps) {
+export function MarketList({ selectedSymbol, onSelect, tickers, sessionStats }: MarketListProps) {
   const [search, setSearch] = useState("");
-  const baselineRef = useRef<Record<string, number>>({});
-
-  useEffect(() => {
-    tickers.forEach((t) => {
-      if (baselineRef.current[t.symbol] === undefined) {
-        baselineRef.current[t.symbol] = t.mid;
-      }
-    });
-  }, [tickers]);
 
   const markets = tickers.map((t) => {
-    const base = baselineRef.current[t.symbol] || t.mid;
+    const base = sessionStats[t.symbol]?.open ?? t.mid;
     const change = base > 0 ? ((t.mid - base) / base) * 100 : 0;
     return {
       symbol: t.symbol,
