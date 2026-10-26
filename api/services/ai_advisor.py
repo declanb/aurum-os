@@ -103,6 +103,32 @@ async def generate_recommendations(
             edge_fingerprint,
         )
 
+    # OpenAI Agents SDK path: the model calls tools to fetch its own market data,
+    # then returns one structured recommendation per symbol. Requires a real
+    # OpenAI key (the SDK does not use the GitHub Models fallback).
+    if settings.AURUM_USE_AGENTS_SDK and has_openai:
+        from api.services import agent_advisor
+
+        recommendations = await agent_advisor.generate_recommendations(
+            symbols=symbols[:max_recommendations],
+            playbook=playbook,
+            edge_fingerprint=edge_fingerprint,
+        )
+        for rec in recommendations:
+            rec["playbook_used"] = {
+                "id": playbook["id"],
+                "name": playbook["name"],
+                "trader": playbook["trader"],
+            }
+            rec["edge_match_score"] = score_match(rec, edge_fingerprint)
+        if not recommendations:
+            logger.info(
+                "Agents SDK found no high-confidence setups across %d symbols with %s playbook",
+                len(symbols),
+                playbook["id"],
+            )
+        return recommendations
+
     recommendations = []
 
     for symbol in symbols[:max_recommendations]:

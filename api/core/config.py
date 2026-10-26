@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     SCOUT_PLAYBOOK: str = "trend_follower"   # wyckoff, ict_smc, trend_follower, macro, livermore
     OPENAI_MODEL: str = "gpt-4o-mini"        # Cost protection: mini is ~10x cheaper than gpt-4o
 
+    # ── OpenAI Agents SDK ─────────────────────────────────────────────────────
+    # When set, recommendations are generated via the OpenAI Agents SDK (the model
+    # calls tools to fetch price/candles/indicators itself) instead of the single-shot
+    # Chat Completions path. Requires a real OPENAI_API_KEY — the Agents SDK targets
+    # OpenAI's Responses API and does NOT use the GitHub Models fallback.
+    AURUM_USE_AGENTS_SDK: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
