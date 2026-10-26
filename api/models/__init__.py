@@ -12,6 +12,7 @@ from .trade import (
 from .journal import JournalEntry
 from .note import MarketNote
 from .checklist import TradeChecklist
+from .copy_book import CopySession, CopyPosition
 
 __all__ = [
     "SQLModel",
@@ -23,5 +24,7 @@ __all__ = [
     "ProfitNotification",
     "JournalEntry",
     "MarketNote",
-    "TradeChecklist"
+    "TradeChecklist",
+    "CopySession",
+    "CopyPosition",
 ]

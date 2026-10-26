@@ -9,6 +9,7 @@ are set, otherwise the `revx` CLI.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Optional
 
 from api.services import revolut_x_client as rx
@@ -107,21 +108,88 @@ async def get_orderbook(symbol: str = "BTC-USD", limit: int = 20) -> dict:
     return {"symbol": symbol, "bids": _norm("bids"), "asks": _norm("asks")}
 
 
+# Percent-point keys a Revolut X ticker may carry. 1.5 means +1.5%.
+# Absolute price-change fields are intentionally absent: treating them as
+# percents would invent a move.
+_CHANGE_PCT_KEYS = (
+    "change_24h_pct",
+    "price_change_percentage_24h",
+    "price_change_pct_24h",
+    "price_change_pct",
+    "priceChangePercent",
+    "change_percent",
+    "change_percentage",
+    "changePercent",
+    "percentage_change",
+    "pct_change",
+    "change_pct",
+)
+
+
+def _optional_float(value: Any) -> Optional[float]:
+    if value is None or value == "":
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(num):
+        return None
+    return num
+
+
+def change_24h_pct(row: Any) -> Optional[float]:
+    """24h change in percent points from one ticker row.
+
+    Uses an explicit percent field when the payload has one. Otherwise derives
+    it from that same row's open and last (or mid). Returns None when the row
+    does not contain enough information. Does not substitute a price.
+    """
+    if not isinstance(row, dict):
+        return None
+    for key in _CHANGE_PCT_KEYS:
+        if key not in row:
+            continue
+        num = _optional_float(row.get(key))
+        if num is not None:
+            return num
+    open_px = _optional_float(row.get("open"))
+    if open_px is None:
+        open_px = _optional_float(row.get("open_24h"))
+    if open_px is None:
+        open_px = _optional_float(row.get("open24h"))
+    last = None
+    for key in ("last_price", "last", "price", "mid"):
+        last = _optional_float(row.get(key))
+        if last is not None and last > 0:
+            break
+        last = None
+    if open_px and open_px > 0 and last:
+        return (last - open_px) / open_px * 100.0
+    return None
+
+
 async def get_tickers(symbols: Optional[list[str]] = None) -> list[dict]:
-    """Multi-pair tickers for the market list."""
+    """Multi-pair tickers for the market list.
+
+    ``change_24h_pct`` is set only when the payload carries a percent change
+    or an open and a last. Otherwise it is null.
+    """
     raw = await rx.list_tickers(symbols)
     rows = raw if isinstance(raw, list) else []
     out = []
     for r in rows:
         bid = float(r.get("bid") or 0)
         ask = float(r.get("ask") or 0)
-        last = float(r.get("last_price") or r.get("mid") or 0)
+        last = float(r.get("last_price") or r.get("last") or r.get("mid") or 0)
         out.append({
             "symbol": r.get("symbol"),
             "bid": bid,
             "ask": ask,
             "last": last,
             "mid": float(r.get("mid") or 0) or (bid + ask) / 2 if bid and ask else last,
+            "open": _optional_float(r.get("open") if r.get("open") not in (None, "") else r.get("open_24h")),
+            "change_24h_pct": change_24h_pct(r),
         })
     return out
 

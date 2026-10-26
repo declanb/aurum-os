@@ -691,6 +691,135 @@ export async function markProfitNotificationRead(id: number): Promise<ProfitNoti
     }
 }
 
+export type CopyPositionView = {
+    id: number;
+    session_id: number;
+    symbol: string;
+    status: "open" | "closed" | string;
+    direction: string;
+    qty: number;
+    entry_price: number;
+    entry_notional_eur: number;
+    opened_at: string;
+    signal_source: "trade_idea" | "gainer" | string;
+    signal_reason: string;
+    trade_idea_id: number | null;
+    stop_price: number | null;
+    target_price: number | null;
+    mark: number | null;
+    unrealized_pnl_eur: number | null;
+    unrealized_pnl_pct: number | null;
+    exit_price: number | null;
+    realized_pnl_eur: number | null;
+    exit_reason: string | null;
+    closed_at: string | null;
+};
+
+export type CopySessionView = {
+    id: number;
+    status: "running" | "stopped" | string;
+    dry_run: boolean;
+    starting_bankroll_eur: number;
+    cash_eur: number;
+    equity_eur: number;
+    realized_pnl_eur: number;
+    unrealized_pnl_eur: number;
+    session_pnl_eur: number;
+    open_count: number;
+    closed_count: number;
+    position_pct: number;
+    max_notional_eur: number;
+    max_positions: number;
+    any_green: boolean;
+    sources: string[];
+    started_at: string;
+    stopped_at: string | null;
+    last_tick_at: string | null;
+};
+
+export type CopyBookStatus = {
+    dry_run: boolean;
+    live_orders: boolean;
+    broker_writes: boolean;
+    active: boolean;
+    note: string;
+    session: CopySessionView | null;
+    open_positions: CopyPositionView[];
+    closed_trades: CopyPositionView[];
+};
+
+async function readCopyError(res: Response): Promise<string> {
+    try {
+        const body = await res.json();
+        if (typeof body.detail === "string") return body.detail;
+        if (body.detail && typeof body.detail.message === "string") return body.detail.message;
+    } catch {
+        // Response was not JSON.
+    }
+    return "Paper copy book request failed";
+}
+
+export async function fetchCopyStatus(): Promise<CopyBookStatus | null> {
+    try {
+        const res = await fetch(`${API_URL}/copy/status`, { cache: "no-store" });
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
+export async function startCopySession(bankrollEur: number): Promise<{ status: CopyBookStatus | null; error: string | null }> {
+    try {
+        const res = await fetch(`${API_URL}/copy/session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                bankroll_eur: bankrollEur,
+                sources: ["trade_ideas", "gainers"],
+                any_green: true,
+                dry_run: true,
+            }),
+        });
+        if (!res.ok) return { status: null, error: await readCopyError(res) };
+        return { status: await res.json(), error: null };
+    } catch (error) {
+        console.error(error);
+        return { status: null, error: "Paper copy book request failed" };
+    }
+}
+
+export async function tickCopySession(): Promise<{ status: CopyBookStatus | null; error: string | null }> {
+    try {
+        const res = await fetch(`${API_URL}/copy/tick`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+        });
+        if (!res.ok) return { status: null, error: await readCopyError(res) };
+        return { status: await res.json(), error: null };
+    } catch (error) {
+        console.error(error);
+        return { status: null, error: "Paper copy book request failed" };
+    }
+}
+
+export async function stopCopySession(): Promise<{ status: CopyBookStatus | null; error: string | null }> {
+    try {
+        const res = await fetch(`${API_URL}/copy/stop`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+        });
+        if (!res.ok) return { status: null, error: await readCopyError(res) };
+        return { status: await res.json(), error: null };
+    } catch (error) {
+        console.error(error);
+        return { status: null, error: "Paper copy book request failed" };
+    }
+}
+
 export async function markAllProfitNotificationsRead(): Promise<ProfitNotificationList | null> {
     try {
         const res = await fetch(`${API_URL}/notifications/read-all`, { method: "POST" });

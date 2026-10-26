@@ -139,6 +139,20 @@ X_TREND_QUERY=(bitcoin OR ethereum OR solana) lang:en -is:retweet
 
 Do not commit a real `X_BEARER_TOKEN`. The loader never logs it.
 
+### 4. Paper copy book (dry-run only)
+
+Not a live order path. Revolut X has no native copy API. `api/services/copy_book.py` paper-mirrors LONG EUR `TradeIdea` rows (Ready for Approval or Approved) and 24h EUR ticker gainers onto a virtual book. Default bankroll is €200 (`HELM_COPY_BANKROLL_EUR`, alias `AURUM_COPY_BANKROLL_EUR`).
+
+It does not call the order service, does not write an `ApprovalEvent`, and does not create an `ExecutionTicket`. Guardian and the human execute click stay as they are. `dry_run` cannot be turned off.
+
+```bash
+python -m api.services.copy_book start --bankroll 200
+python -m api.services.copy_book tick
+python -m api.services.copy_book status
+```
+
+`POST /api/copy/tick` and `GET /api/copy/status` are the overnight poll. The page is `/app/copy`. See `docs/helm-copy-book.md`.
+
 ## Agent Registry (`/tmp/aurum_agents.json`)
 
 Shared JSON file where agents register on startup + heartbeat every ~60s.

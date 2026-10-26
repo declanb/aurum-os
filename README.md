@@ -75,3 +75,4 @@ This repository is structured for native deployment to Vercel via GitHub connect
 - UI elements prefer `shadcn/ui` using the dark-mode primary configuration.
 - The execution layer must always validate an \`ApprovalEvent\` before triggering broker adapters. Helm is wired to a live Revolut X account (real funds). Agents may recommend and stage a \`TradeIdea\` only. Path: TradeIdea → Approvals UI → human execute click → broker. Auto-approve is not auto-execute. Spot only — no shorts, leverage, or perps.
 - Revolut X spot cannot attach a stop or target. Helm exit brackets own those sells. See `docs/helm-exit-brackets.md`.
+- The paper copy book (`/app/copy`, `POST /api/copy/session`) simulates scout ideas and EUR gainers on a virtual balance. Default bankroll is €200 (`HELM_COPY_BANKROLL_EUR`). Revolut X has no copy API. That path never places a live order. See `docs/helm-copy-book.md`.
