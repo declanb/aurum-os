@@ -494,6 +494,125 @@ export type LivePositionsResponse = {
     unmatched_count: number;
 };
 
+export type FleetCard = {
+    id: string;
+    name: string;
+    kind: string;
+    blurb: string;
+    health: "healthy" | "stale" | "idle" | "off";
+    paused: boolean;
+    symbol: string | null;
+    last_action: string;
+    last_action_at: string | null;
+    last_heartbeat: string | null;
+    can_clear: boolean;
+    detail: string | null;
+};
+
+export type FleetBoard = {
+    paused: boolean;
+    paper_trading: boolean;
+    cron_enabled: boolean;
+    cards: FleetCard[];
+};
+
+export async function fetchFleet(): Promise<FleetBoard | null> {
+    try {
+        const res = await fetch(`${API_URL}/agent/fleet`);
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
+export async function pauseAgents(): Promise<boolean> {
+    const res = await fetch(`${API_URL}/agent/pause`, { method: "POST" });
+    return res.ok;
+}
+
+export async function resumeAgents(): Promise<boolean> {
+    const res = await fetch(`${API_URL}/agent/resume`, { method: "POST" });
+    return res.ok;
+}
+
+export async function cleanStaleAgents(): Promise<boolean> {
+    const res = await fetch(`${API_URL}/agent/clean`, { method: "POST" });
+    return res.ok;
+}
+
+export async function clearAgent(agentId: string): Promise<boolean> {
+    const res = await fetch(`${API_URL}/agent/clear/${encodeURIComponent(agentId)}`, { method: "POST" });
+    return res.ok;
+}
+
+export type IdeaExplanation = {
+    trade_id: number;
+    symbol: string;
+    direction: string;
+    status?: string;
+    headline: string;
+    why: string;
+    thesis: string;
+    invalidation: string;
+    levels: {
+        entry: number | null;
+        stop: number | null;
+        target: number | null;
+        risk_reward: number | null;
+    };
+    spot_note: string;
+    advisory: boolean;
+    can_execute: boolean;
+};
+
+export type GuruReply = {
+    reply: string;
+    advisory: boolean;
+    can_execute: boolean;
+    source: string;
+    trade_id?: number;
+};
+
+export async function fetchIdeaWhy(tradeId: number): Promise<IdeaExplanation | null> {
+    try {
+        const res = await fetch(`${API_URL}/advisor/idea/${tradeId}`);
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
+export async function askIdea(tradeId: number, question: string): Promise<GuruReply | null> {
+    const res = await fetch(`${API_URL}/advisor/idea/${tradeId}/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+    });
+    if (!res.ok) {
+        throw new Error("The guru could not answer that.");
+    }
+    return res.json();
+}
+
+export async function askGuru(
+    messages: { role: "user" | "assistant"; content: string }[],
+    tradeId?: number,
+): Promise<GuruReply> {
+    const res = await fetch(`${API_URL}/advisor/guru`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, trade_id: tradeId ?? null }),
+    });
+    if (!res.ok) {
+        throw new Error("The guru could not answer that.");
+    }
+    return res.json();
+}
+
 export async function fetchLivePositions(): Promise<LivePositionsResponse | null> {
     try {
         const res = await fetch(`${API_URL}/revolut-x/positions/live`);

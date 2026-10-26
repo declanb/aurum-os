@@ -552,6 +552,10 @@ def _register_signal_role(symbols: list[str], bundle_count: int, source_mode: st
             "source_mode": source_mode,
         },
     )
+    agent_registry.record_action(
+        AGENT_ID,
+        f"Read-only bundles: {bundle_count} ({source_mode}). No orders.",
+    )
 
 
 async def collect_for_advisor(symbols: list[str]) -> tuple[str, list[dict]]:

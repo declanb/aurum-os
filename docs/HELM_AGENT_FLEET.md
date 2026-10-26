@@ -44,7 +44,7 @@ or submit orders.
 | human Approvals | `api/routers/approvals.py` | No | Built. This is the `ApprovalEvent` |
 | trade_executor | `trade_executor.py` via `POST /api/revolut-x/execute/{id}` | Yes, after the event | Built |
 | profit_hunter | `profit_hunter.py` | Exit sell for a position it was started on | Built |
-| Trading Guru | `.github/agents/trading-guru.agent.md` | No | Built. Not on the write path |
+| Trading Guru | `.github/agents/trading-guru.agent.md` and `/app/guru` | No | Built. Not on the write path |
 
 `scout_agent` (`api/services/scout_agent.py` and `GET /cron/scout`) is the loop around the recommender. It polls, asks `ai_advisor` for recommendations, stages them as `Ready for Approval`, and may auto-approve when that flag is on. It does not call `trade_executor`.
 
@@ -144,7 +144,13 @@ These sit beside `trend_scout`. They do not replace SignalBundles and they do no
 - `.github/agents/revolut-x-trend-expert.agent.md` — user-invocable Copilot agent. Tools are read, search, and web. Advisory read only. It does not edit the repo.
 - `api/services/trend_context.py` — `AURUM_TREND_CONTEXT` (default off). Public regime numbers (CoinGecko global, Fear & Greed, headlines, optional X GET) stamped as `trend_regime` / `trend_sources`. Missing numbers are omitted. `GET /api/recommendations/?include_trends=true` requests that read for one call.
 
-Trading Guru stays advisory-only.
+Trading Guru stays advisory-only. The same mentor is available in the web app at `/app/guru` and as a follow-up on Approvals. Those routes (`POST /api/advisor/guru`, `GET /api/advisor/idea/{id}`, `POST /api/advisor/idea/{id}/ask`) read a staged idea and an optional quote. They do not write an `ApprovalEvent` and they do not call `trade_executor`.
+
+## In-app agent surfaces
+
+`/app/agents` shows live cards for this fleet: scout, recommender, guardian, trend scout, exit brackets, and profit hunters. Health is the registry heartbeat (healthy, stale, idle, or off). Last action is the note each agent records, or the newest staged idea and armed bracket when a cron pass left no process. Pause and resume use the existing global flag. Clear drops one stale registry row.
+
+Approvals shows "Why this idea" from the TradeIdea thesis, levels, and invalidation, then one advisory follow-up. Approve and Execute stay on their own buttons.
 
 ## Out of scope for this slice
 

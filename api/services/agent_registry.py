@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -31,6 +32,8 @@ logger = logging.getLogger(__name__)
 
 REGISTRY_PATH = Path("/tmp/aurum_agents.json")
 STALE_THRESHOLD_MINUTES = 5
+_AGENT_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_MAX_ACTION = 280
 
 
 def _load() -> dict:
@@ -78,6 +81,64 @@ def heartbeat(agent_id: str) -> None:
     if agent_id in data:
         data[agent_id]["last_heartbeat"] = datetime.now(timezone.utc).isoformat()
         _save(data)
+
+
+def record_action(agent_id: str, summary: str) -> None:
+    """Remember what an agent just did.
+
+    Stored under ``_activity`` so on-demand roles (recommender, guardian,
+    exit brackets) can show a last action without looking like a live
+    position claim. A running registry row, when present, gets the same
+    note on its metadata. This never places an order.
+    """
+    if not _AGENT_ID.match(agent_id or ""):
+        return
+    text = " ".join((summary or "").split())[:_MAX_ACTION]
+    if not text:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    data = _load()
+    activity = data.get("_activity")
+    if not isinstance(activity, dict):
+        activity = {}
+        data["_activity"] = activity
+    activity[agent_id] = {"summary": text, "at": now}
+    entry = data.get(agent_id)
+    if isinstance(entry, dict):
+        meta = entry.get("metadata")
+        if not isinstance(meta, dict):
+            meta = {}
+            entry["metadata"] = meta
+        meta["last_action"] = text
+        meta["last_action_at"] = now
+    _save(data)
+
+
+def get_activity() -> dict[str, dict]:
+    """Last-action notes. Keys starting with ``_`` stay hidden from ``get_all``."""
+    data = _load()
+    activity = data.get("_activity")
+    if not isinstance(activity, dict):
+        return {}
+    return {
+        key: value
+        for key, value in activity.items()
+        if isinstance(key, str) and isinstance(value, dict) and _AGENT_ID.match(key)
+    }
+
+
+def clear_agent(agent_id: str) -> bool:
+    """Drop one registry row. Does not clear the pause flag or activity history."""
+    if not _AGENT_ID.match(agent_id or ""):
+        return False
+    data = _load()
+    entry = data.get(agent_id)
+    if not isinstance(entry, dict):
+        return False
+    del data[agent_id]
+    _save(data)
+    logger.info("Cleared agent registry row: %s", agent_id)
+    return True
 
 
 def unregister(agent_id: str) -> None:

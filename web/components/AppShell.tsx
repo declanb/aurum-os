@@ -12,6 +12,7 @@ import {
     LayoutDashboard,
     Wallet,
     Bot,
+    MessageCircle,
     MoreHorizontal,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
     { href: "/app/my-trade", icon: Wallet, label: "My Trade" },
     { href: "/app/exchange", icon: LineChart, label: "Exchange" },
     { href: "/app/agents", icon: Bot, label: "Agents" },
+    { href: "/app/guru", icon: MessageCircle, label: "Guru" },
     { href: "/app/approvals", icon: ShieldAlert, label: "Approvals" },
     { href: "/app/planner", icon: FileText, label: "Planner" },
     { href: "/app/journal", icon: BookOpen, label: "Journal" },
@@ -41,6 +43,7 @@ const MORE_ITEMS = [
     { href: "/app/planner", icon: FileText, label: "Planner" },
     { href: "/app/journal", icon: BookOpen, label: "Journal" },
     { href: "/app/agents", icon: Bot, label: "Agents" },
+    { href: "/app/guru", icon: MessageCircle, label: "Guru" },
     { href: "/app/settings", icon: Settings, label: "Settings" },
 ];
 
@@ -128,9 +131,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-8 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-6 lg:pb-8">
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-8 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:pb-6 lg:pb-8">
                     <ProfitBanner />
-                    {children}
+                    <div className="flex min-h-0 flex-1 flex-col">
+                        {children}
+                    </div>
                 </div>
             </main>
 

@@ -80,6 +80,7 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
 
     # Same pause flag the local fleet honors. Stops new ideas; does not place orders.
     if agent_registry.is_paused():
+        agent_registry.record_action("scout", "Paused — cron pass skipped. No ideas staged.")
         return {"status": "paused", "reason": "AURUM_AGENTS_PAUSED or registry pause"}
     
     # Rate limit (belt-and-suspenders)
@@ -185,6 +186,14 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
         except Exception as exc:
             logger.error(f"  {symbol}: ERROR during auto-approve: {exc}")
 
+    agent_registry.record_action(
+        "scout",
+        f"Cron pass staged {staged_count}, auto-approved {approved_count}.",
+    )
+    agent_registry.record_action(
+        "recommender",
+        f"Ranked {len(recs)} setup(s) on the cron pass.",
+    )
     return {
         "status": "success",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -220,6 +229,7 @@ async def hunt_tick(authorization: Optional[str] = Header(None)):
     # Same pause flag as scout. A paused fleet must not even propose exits.
     # Profit pings are a separate read: they do not propose or send a sell.
     if agent_registry.is_paused():
+        agent_registry.record_action("exit_brackets", "Paused — exit check skipped. No EXIT idea staged.")
         profit = {"created": 0, "source": "rate_limited"}
         if _check_rate_limit("hunt_profit", 110):
             profit = await _record_profit_notifications()
@@ -285,6 +295,13 @@ async def hunt_tick(authorization: Optional[str] = Header(None)):
         len(summary["paper_closed"]),
         summary["broker_orders_placed"],
         profit.get("created"),
+    )
+    agent_registry.record_action(
+        "exit_brackets",
+        (
+            f"Checked {summary.get('checked', 0)} bracket(s). "
+            f"EXIT ideas proposed: {len(summary.get('proposed') or [])}."
+        ),
     )
     return {
         "status": "success",

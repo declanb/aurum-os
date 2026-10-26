@@ -1,320 +1,226 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import Link from "next/link";
+import { Bot, Pause, Play, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bot, Play, Pause, RefreshCw, AlertTriangle, CheckCircle, XCircle, Activity, TrendingUp } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    cleanStaleAgents,
+    clearAgent,
+    fetchFleet,
+    pauseAgents,
+    resumeAgents,
+    type FleetBoard,
+    type FleetCard,
+} from "@/lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
-
-type Agent = {
-  agent_id: string;
-  symbol: string | null;
-  status: string;
-  last_heartbeat: string;
-  pid: number;
-  metadata: any;
+const HEALTH_LABEL: Record<FleetCard["health"], string> = {
+    healthy: "Healthy",
+    stale: "Stale",
+    idle: "Idle",
+    off: "Off",
 };
 
-type AgentRegistry = {
-  [key: string]: Agent;
+const HEALTH_CLASS: Record<FleetCard["health"], string> = {
+    healthy: "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    stale: "border-amber-500/40 bg-amber-500/15 text-amber-800 dark:text-amber-300",
+    idle: "border-border bg-muted text-muted-foreground",
+    off: "border-border bg-muted text-muted-foreground",
 };
 
-type AgentStatus = {
-  total_agents: number;
-  running: number;
-  stale: number;
-  paused: boolean;
-};
+function ago(iso: string | null): string {
+    if (!iso) return "";
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return "";
+    const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 48) return `${hours}h ago`;
+    return new Date(iso).toLocaleString();
+}
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<AgentRegistry>({});
-  const [status, setStatus] = useState<AgentStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState<string[]>([]);
+    const [board, setBoard] = useState<FleetBoard | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    load();
-    const i = setInterval(load, 5_000);
-    return () => clearInterval(i);
-  }, []);
+    useEffect(() => {
+        let cancelled = false;
+        let timer = 0;
+        const load = async () => {
+            const next = await fetchFleet();
+            if (cancelled) return;
+            if (next) {
+                setBoard(next);
+                setError(null);
+            } else {
+                setError("Could not reach the agent fleet.");
+            }
+            setLoading(false);
+        };
+        const tick = () => {
+            if (!cancelled && document.visibilityState === "visible") void load();
+            timer = window.setTimeout(tick, 5000);
+        };
+        void load();
+        timer = window.setTimeout(tick, 5000);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, []);
 
-  const load = async () => {
-    try {
-      const [agentsRes, statusRes] = await Promise.all([
-        fetch(`${API_URL}/agent/`),
-        fetch(`${API_URL}/agent/status`),
-      ]);
-
-      const agentsData: AgentRegistry = agentsRes.ok ? await agentsRes.json() : {};
-      const statusData = statusRes.ok ? await statusRes.json() : null;
-
-      setAgents(agentsData);
-      setStatus(statusData);
-
-      // Fetch profit hunter logs if any exist
-      const profitHunterAgents = Object.values(agentsData).filter((a: Agent) =>
-        a.agent_id.startsWith("profit_hunter")
-      );
-      if (profitHunterAgents.length > 0) {
-        const logsRes = await fetch(`${API_URL}/agent/profit-hunter/logs`);
-        if (logsRes.ok) {
-          const logsData = await logsRes.json();
-          setLogs(logsData.logs || []);
+    const reload = async () => {
+        const next = await fetchFleet();
+        if (next) {
+            setBoard(next);
+            setError(null);
         }
-      }
-    } catch (e) {
-      console.error("Failed to load agents:", e);
-    } finally {
-      setLoading(false);
+    };
+
+    const run = async (action: () => Promise<boolean>) => {
+        setBusy(true);
+        try {
+            const ok = await action();
+            if (!ok) setError("That fleet control did not go through.");
+            await reload();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const cards = board?.cards ?? [];
+    const counts = {
+        healthy: cards.filter((card) => card.health === "healthy").length,
+        stale: cards.filter((card) => card.health === "stale").length,
+        idle: cards.filter((card) => card.health === "idle" || card.health === "off").length,
+    };
+
+    if (loading && !board) {
+        return <p className="text-sm text-muted-foreground">Loading the Helm fleet…</p>;
     }
-  };
 
-  const handlePause = async () => {
-    await fetch(`${API_URL}/agent/pause`, { method: "POST" });
-    load();
-  };
-
-  const handleResume = async () => {
-    await fetch(`${API_URL}/agent/resume`, { method: "POST" });
-    load();
-  };
-
-  const handleClean = async () => {
-    await fetch(`${API_URL}/agent/clean`, { method: "POST" });
-    load();
-  };
-
-  const scoutAgents = Object.values(agents).filter((a) => a.agent_id === "scout");
-  const profitHunters = Object.values(agents).filter((a) => a.agent_id.startsWith("profit_hunter"));
-
-  if (loading) {
     return (
-      <div className="flex items-center justify-center h-[50vh]">
-        <p className="text-muted-foreground animate-pulse">Loading agent status…</p>
-      </div>
-    );
-  }
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                        <Bot className="h-7 w-7 text-primary" />
+                        Agents
+                    </h1>
+                    <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                        Live cards for the Helm fleet. They stage ideas and watch exits. None of them send a Revolut X order from this screen.
+                    </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-11"
+                        disabled={busy}
+                        onClick={() => void run(cleanStaleAgents)}
+                    >
+                        <RefreshCw className="h-4 w-4" />
+                        Clean stale
+                    </Button>
+                    {board?.paused ? (
+                        <Button type="button" className="min-h-11 bg-emerald-600 text-white hover:bg-emerald-500" disabled={busy} onClick={() => void run(resumeAgents)}>
+                            <Play className="h-4 w-4" />
+                            Run
+                        </Button>
+                    ) : (
+                        <Button type="button" variant="destructive" className="min-h-11" disabled={busy} onClick={() => void run(pauseAgents)}>
+                            <Pause className="h-4 w-4" />
+                            Pause
+                        </Button>
+                    )}
+                </div>
+            </div>
 
-  return (
-    <div className="space-y-6 max-w-7xl min-w-0">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-1">
-            <Bot className="w-7 h-7 sm:w-8 sm:h-8 inline mr-2 text-primary" />
-            Agent Fleet
-          </h1>
-          <p className="text-muted-foreground">
-            Scout finds trades · Profit hunters exit positions · All registered agents heartbeat every 60s
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-          <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={handleClean}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Clean Stale
-          </Button>
-          {status?.paused ? (
-            <Button size="sm" onClick={handleResume} className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700">
-              <Play className="w-4 h-4 mr-2" />
-              Resume All
-            </Button>
-          ) : (
-            <Button size="sm" variant="destructive" className="w-full sm:w-auto" onClick={handlePause}>
-              <Pause className="w-4 h-4 mr-2" />
-              Pause All
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Status Overview */}
-      {status && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase">Total Agents</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{status.total_agents}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase">Running</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-emerald-500">{status.running}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase">Stale</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-500">{status.stale}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground uppercase">Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Badge variant={status.paused ? "destructive" : "default"} className="text-sm">
-                {status.paused ? "⏸ PAUSED" : "▶ ACTIVE"}
-              </Badge>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Scout Agent */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Activity className="w-5 h-5 text-primary" />
-              Scout Agent
-            </CardTitle>
-            {scoutAgents.length > 0 && (
-              <Badge variant="default" className="bg-emerald-600">
-                <CheckCircle className="w-3 h-3 mr-1" />
-                Running
-              </Badge>
+            {board?.paused && (
+                <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                    Fleet paused. Scout and the exit watcher skip their next pass. Open orders are unchanged.
+                </p>
             )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {scoutAgents.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground mb-1">Scout agent not running</p>
-              <p className="text-xs text-muted-foreground">
-                Start with: <code className="bg-muted px-2 py-0.5 rounded text-xs break-all">./scripts/start_scout.sh wyckoff</code>
-              </p>
-            </div>
-          ) : (
-            scoutAgents.map((agent) => (
-              <div key={agent.agent_id} className="space-y-3">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Playbook</p>
-                    <p className="font-mono text-foreground font-semibold">
-                      {agent.metadata?.playbook || "Unknown"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Poll Interval</p>
-                    <p className="font-mono text-foreground">{agent.metadata?.poll_minutes || "?"} minutes</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">PID</p>
-                    <p className="font-mono text-foreground">{agent.pid}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Last Heartbeat</p>
-                    <p className="font-mono text-foreground text-xs">
-                      {new Date(agent.last_heartbeat).toLocaleTimeString()}
-                    </p>
-                  </div>
-                </div>
-                {agent.metadata?.symbols && (
-                  <div>
-                    <p className="text-muted-foreground text-xs uppercase tracking-wider mb-2">Monitoring</p>
-                    <div className="flex flex-wrap gap-2">
-                      {agent.metadata.symbols.map((sym: string) => (
-                        <Badge key={sym} variant="outline" className="font-mono text-xs">
-                          {sym}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+            {board && !board.cron_enabled && (
+                <p className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                    Scheduled scout and exit checks are switched off. A local process can still show as healthy.
+                </p>
+            )}
+            {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {/* Profit Hunters */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-emerald-500" />
-              Profit Hunters
-            </CardTitle>
-            <Badge variant="outline">{profitHunters.length} active</Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {profitHunters.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-muted-foreground mb-1">No profit hunters monitoring positions</p>
-              <p className="text-xs text-muted-foreground">
-                Start with: <code className="bg-muted px-2 py-0.5 rounded text-xs break-all">python -m api.services.profit_hunter --symbol BTC-EUR --qty 0.0001 --cost-eur 2.00</code>
-              </p>
+            <div className="grid grid-cols-3 gap-3">
+                <Stat label="Healthy" value={counts.healthy} />
+                <Stat label="Stale" value={counts.stale} />
+                <Stat label="Idle" value={counts.idle} />
             </div>
-          ) : (
-            <div className="space-y-3">
-              {profitHunters.map((agent) => (
-                <div
-                  key={agent.agent_id}
-                  className="border border-border rounded-lg p-4 bg-muted/30 hover:bg-muted/50 transition"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="font-bold text-foreground text-lg">{agent.symbol}</p>
-                      <Badge variant="default" className="mt-1 text-xs bg-emerald-600">
-                        Hunting
-                      </Badge>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">PID {agent.pid}</p>
-                      <p className="text-xs text-muted-foreground font-mono">
-                        {new Date(agent.last_heartbeat).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 sm:gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Qty</p>
-                      <p className="font-mono text-foreground">{agent.metadata?.qty || "?"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Cost</p>
-                      <p className="font-mono text-foreground">€{agent.metadata?.cost_eur?.toFixed(2) || "?"}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Target Profit</p>
-                      <p className="font-mono text-emerald-500 font-semibold">
-                        €{agent.metadata?.min_profit_eur?.toFixed(2) || "?"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Logs */}
-      {logs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold">Recent Logs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-black/90 rounded-lg p-4 font-mono text-xs text-green-400 h-64 overflow-auto min-w-0">
-              {logs.map((line, i) => (
-                <div key={i} className="whitespace-pre">{line}</div>
-              ))}
+            <div className="grid gap-3 sm:grid-cols-2" aria-live="polite">
+                {cards.map((card) => (
+                    <Card key={card.id} data-testid="fleet-card" className="border-border">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-start justify-between gap-3">
+                                <CardTitle className="text-base font-semibold leading-snug">{card.name}</CardTitle>
+                                <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${HEALTH_CLASS[card.health]}`}>
+                                        {HEALTH_LABEL[card.health]}
+                                    </span>
+                                    {card.paused && (
+                                        <Badge variant="outline" className="text-[10px]">Skips next</Badge>
+                                    )}
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3 text-sm">
+                            <p className="text-muted-foreground">{card.blurb}</p>
+                            {card.symbol && (
+                                <span className="inline-flex rounded-md border border-border px-2 py-0.5 font-mono text-xs">{card.symbol}</span>
+                            )}
+                            {card.detail && <p className="font-mono text-xs text-foreground/80">{card.detail}</p>}
+                            <div>
+                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Last action</p>
+                                <p className="mt-1 text-foreground">{card.last_action}</p>
+                                {card.last_action_at && (
+                                    <p className="mt-1 text-xs text-muted-foreground">{ago(card.last_action_at)}</p>
+                                )}
+                            </div>
+                            {card.last_heartbeat && (
+                                <p className="text-xs text-muted-foreground">Heartbeat {ago(card.last_heartbeat)}</p>
+                            )}
+                            {card.can_clear && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="min-h-11 w-full"
+                                    disabled={busy}
+                                    onClick={() => void run(() => clearAgent(card.id))}
+                                >
+                                    Clear status
+                                </Button>
+                            )}
+                        </CardContent>
+                    </Card>
+                ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
+
+            <p className="text-sm text-muted-foreground">
+                Want a second opinion before you approve?{" "}
+                <Link href="/app/guru" className="underline underline-offset-2">Ask the Trading Guru</Link>.
+            </p>
+        </div>
+    );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+    return (
+        <div className="rounded-xl border border-border bg-card px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+        </div>
+    );
 }
