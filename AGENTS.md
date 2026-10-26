@@ -1,6 +1,10 @@
-# Aurum Agent Fleet
+# Helm agent fleet
 
-Aurum runs multiple autonomous agents that coordinate via a shared registry. Each agent handles one concern and registers itself so others can see what's running.
+**Helm** is the product: a discretionary, human-in-the-loop crypto trading copilot. This repository is `aurum-os`. Process names, `/tmp/aurum_agents.json`, env prefixes (`AURUM_*`), and package paths still use Aurum identifiers.
+
+Helm is connected to a **live Revolut X spot account (real funds)**. Agents may recommend and stage trades for human review only. Never place, cancel, or modify a Revolut X order unless a human has recorded an `ApprovalEvent` and clicked execute. Path: `TradeIdea` → Approvals UI → human execute → broker. Auto-approve is not auto-execute. Spot only — no shorts, leverage, or perps. Keep the daily cap, pause flag, and kill switch.
+
+The fleet coordinates through a shared registry. Each process handles one concern and registers itself so the others can see what is running.
 
 The Helm recommendation path (signal → idea → human execute → exit), the `SignalBundle` / `TradeIdea` contracts, and the Revolut rules are in [docs/HELM_AGENT_FLEET.md](docs/HELM_AGENT_FLEET.md).
 
@@ -28,6 +32,8 @@ The Helm recommendation path (signal → idea → human execute → exit), the `
 
 Shared coordination:  /tmp/aurum_agents.json
 ```
+
+The manual click is the entry path onto Revolut X. `profit_hunter` (detailed below) is an exit watcher; do not add new unattended place, cancel, or modify behavior, and do not drop the `ApprovalEvent` gate on execute.
 
 ## Current Agents
 
