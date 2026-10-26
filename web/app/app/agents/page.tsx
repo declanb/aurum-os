@@ -98,30 +98,30 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-6 max-w-7xl min-w-0">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">
-            <Bot className="w-8 h-8 inline mr-2 text-primary" />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-1">
+            <Bot className="w-7 h-7 sm:w-8 sm:h-8 inline mr-2 text-primary" />
             Agent Fleet
           </h1>
           <p className="text-muted-foreground">
             Scout finds trades · Profit hunters exit positions · All registered agents heartbeat every 60s
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button size="sm" variant="outline" onClick={handleClean}>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={handleClean}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Clean Stale
           </Button>
           {status?.paused ? (
-            <Button size="sm" onClick={handleResume} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button size="sm" onClick={handleResume} className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700">
               <Play className="w-4 h-4 mr-2" />
               Resume All
             </Button>
           ) : (
-            <Button size="sm" variant="destructive" onClick={handlePause}>
+            <Button size="sm" variant="destructive" className="w-full sm:w-auto" onClick={handlePause}>
               <Pause className="w-4 h-4 mr-2" />
               Pause All
             </Button>
@@ -191,7 +191,7 @@ export default function AgentsPage() {
               <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground mb-1">Scout agent not running</p>
               <p className="text-xs text-muted-foreground">
-                Start with: <code className="bg-muted px-2 py-0.5 rounded text-xs">./scripts/start_scout.sh wyckoff</code>
+                Start with: <code className="bg-muted px-2 py-0.5 rounded text-xs break-all">./scripts/start_scout.sh wyckoff</code>
               </p>
             </div>
           ) : (
@@ -253,7 +253,7 @@ export default function AgentsPage() {
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground mb-1">No profit hunters monitoring positions</p>
               <p className="text-xs text-muted-foreground">
-                Start with: <code className="bg-muted px-2 py-0.5 rounded text-xs">python -m api.services.profit_hunter --symbol BTC-EUR --qty 0.0001 --cost-eur 2.00</code>
+                Start with: <code className="bg-muted px-2 py-0.5 rounded text-xs break-all">python -m api.services.profit_hunter --symbol BTC-EUR --qty 0.0001 --cost-eur 2.00</code>
               </p>
             </div>
           ) : (
@@ -277,7 +277,7 @@ export default function AgentsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 text-sm">
                     <div>
                       <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Qty</p>
                       <p className="font-mono text-foreground">{agent.metadata?.qty || "?"}</p>
@@ -307,9 +307,9 @@ export default function AgentsPage() {
             <CardTitle className="text-lg font-semibold">Recent Logs</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="bg-black/90 rounded-lg p-4 font-mono text-xs text-green-400 h-64 overflow-y-auto">
+            <div className="bg-black/90 rounded-lg p-4 font-mono text-xs text-green-400 h-64 overflow-auto min-w-0">
               {logs.map((line, i) => (
-                <div key={i}>{line}</div>
+                <div key={i} className="whitespace-pre">{line}</div>
               ))}
             </div>
           </CardContent>

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,12 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 export const metadata: Metadata = {
   title: "Helm — AI Crypto Trading Copilot",
   description: "AI-native crypto trading copilot for disciplined discretionary execution. You stay at the helm.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

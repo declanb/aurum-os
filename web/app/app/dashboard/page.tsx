@@ -117,12 +117,12 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground mt-1">Live trading overview & agent status</p>
         </div>
-        <Badge variant="outline" className="gap-2">
+        <Badge variant="outline" className="gap-2 w-fit">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
           Connected to Revolut X
         </Badge>
@@ -256,17 +256,17 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <GlassCard className="p-6">
         <h3 className="text-lg font-bold text-foreground mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Button asChild variant="outline">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <Button asChild variant="outline" className="w-full min-h-11">
             <a href="/app/planner">Trade Planner</a>
           </Button>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="w-full min-h-11">
             <a href="/app/approvals">Approvals</a>
           </Button>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="w-full min-h-11">
             <a href="/app/journal">Journal</a>
           </Button>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="w-full min-h-11">
             <a href="/app">Exchange View</a>
           </Button>
         </div>

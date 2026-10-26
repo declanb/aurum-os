@@ -34,22 +34,24 @@ export default function JournalDashboard() {
     }
 
     return (
-        <div className="flex h-[calc(100vh-8rem)] gap-6">
+        <div className="flex flex-col lg:flex-row lg:h-[calc(100dvh-8rem)] gap-4 lg:gap-6 min-w-0">
 
             {/* Sidebar: Archive */}
-            <GlassCard className="w-80 flex flex-col shrink-0 overflow-hidden">
+            <GlassCard className="w-full lg:w-80 flex flex-col shrink-0 overflow-hidden lg:min-h-0">
                 <div className="p-4 border-b border-border flex justify-between items-center bg-muted/50">
                     <h3 className="font-bold text-foreground flex items-center gap-2">
                         <BookOpen className="w-4 h-4 text-emerald-500" />
                         Trade Archive
                     </h3>
                 </div>
-                <div className="flex-1 overflow-y-auto w-full p-2 space-y-2">
+                <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto lg:flex-1 w-full p-2 snap-x snap-mandatory overscroll-x-contain">
                     {completedTrades.map(trade => (
                         <button
                             key={trade.id}
+                            type="button"
                             onClick={() => handleSelectTrade(trade)}
-                            className={`w-full text-left p-3 rounded-lg border transition-all ${activeTrade?.id === trade.id ? 'bg-accent border-emerald-500/50' : 'bg-card border-border hover:bg-accent/50'}`}
+                            aria-pressed={activeTrade?.id === trade.id}
+                            className={`snap-start shrink-0 w-[min(16rem,78vw)] lg:w-full lg:shrink text-left p-3 min-h-16 rounded-lg border transition-all ${activeTrade?.id === trade.id ? 'bg-accent border-emerald-500/50' : 'bg-card border-border hover:bg-accent/50'}`}
                         >
                             <div className="flex justify-between items-start mb-2">
                                 <div className="flex items-center gap-2">
@@ -69,29 +71,29 @@ export default function JournalDashboard() {
                         </button>
                     ))}
                     {completedTrades.length === 0 && (
-                        <div className="p-6 text-center text-sm text-muted-foreground">Archive is currently empty.</div>
+                        <div className="p-6 w-full text-center text-sm text-muted-foreground">Archive is currently empty.</div>
                     )}
                 </div>
             </GlassCard>
 
             {/* Main Area: Post-Mortem & Timeline */}
             {activeTrade ? (
-                <div className="flex-1 flex flex-col xl:flex-row gap-6 min-w-0 overflow-hidden">
+                <div className="flex-1 flex flex-col xl:flex-row gap-4 xl:gap-6 min-w-0 lg:min-h-0 lg:overflow-y-auto">
 
                     {/* Read-Only Trade Summary vs Reality */}
-                    <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2">
-                        <div className="flex justify-between items-end">
-                            <div>
-                                <h1 className="text-3xl font-bold text-foreground mb-2">Execution Review</h1>
+                    <div className="flex-1 flex flex-col gap-4 sm:gap-6 min-w-0">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-end">
+                            <div className="min-w-0">
+                                <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Execution Review</h1>
                                 <p className="text-muted-foreground text-sm">Post-mortem analysis for {activeTrade.symbol}.</p>
                             </div>
-                            <Button variant="secondary">
+                            <Button variant="secondary" className="w-full sm:w-auto min-h-11">
                                 <AlignLeft className="w-4 h-4 mr-2" /> Add Journal Note
                             </Button>
                         </div>
 
-                        <GlassCard className="p-6">
-                            <div className="flex justify-between items-start mb-6 border-b border-border pb-6">
+                        <GlassCard className="p-4 sm:p-6">
+                            <div className="flex justify-between items-start mb-6 border-b border-border pb-6 gap-3">
                                 <div>
                                     <div className="flex items-center gap-3 mb-2">
                                         <h2 className="text-2xl font-bold text-foreground">{activeTrade.symbol}</h2>
@@ -105,18 +107,18 @@ export default function JournalDashboard() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-4 mb-6">
-                                <div className="p-4 bg-muted rounded-lg border border-border">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+                                <div className="p-3 sm:p-4 bg-muted rounded-lg border border-border min-w-0">
                                     <div className="text-xs text-muted-foreground mb-1 tracking-wider uppercase">Planned Entry</div>
-                                    <div className="text-xl font-mono text-foreground">{activeTrade.entry_price}</div>
+                                    <div className="text-lg sm:text-xl font-mono text-foreground break-all">{activeTrade.entry_price}</div>
                                 </div>
-                                <div className="p-4 bg-muted rounded-lg border border-border">
+                                <div className="p-3 sm:p-4 bg-muted rounded-lg border border-border min-w-0">
                                     <div className="text-xs text-muted-foreground mb-1 tracking-wider uppercase">Stop Loss</div>
-                                    <div className="text-xl font-mono text-foreground">{activeTrade.stop_price}</div>
+                                    <div className="text-lg sm:text-xl font-mono text-foreground break-all">{activeTrade.stop_price}</div>
                                 </div>
-                                <div className="p-4 bg-muted rounded-lg border border-border">
+                                <div className="p-3 sm:p-4 bg-muted rounded-lg border border-border min-w-0">
                                     <div className="text-xs text-muted-foreground mb-1 tracking-wider uppercase">Planned Target</div>
-                                    <div className="text-xl font-mono text-foreground">{activeTrade.target_price}</div>
+                                    <div className="text-lg sm:text-xl font-mono text-foreground break-all">{activeTrade.target_price}</div>
                                 </div>
                             </div>
 
@@ -143,7 +145,7 @@ export default function JournalDashboard() {
                     </div>
 
                     {/* Right Sidebar: Timeline & Versions */}
-                    <div className="w-96 flex flex-col gap-6 shrink-0">
+                    <div className="w-full xl:w-96 flex flex-col gap-6 shrink-0 min-w-0">
                         <GlassCard className="flex-1 p-5 flex flex-col">
                             <h3 className="font-bold text-foreground mb-4 text-sm uppercase tracking-wide flex items-center gap-2">
                                 <Activity className="w-4 h-4 text-primary" /> Version Timeline
@@ -178,7 +180,7 @@ export default function JournalDashboard() {
 
                 </div>
             ) : (
-                <div className="flex-1 flex items-center justify-center flex-col text-muted-foreground">
+                <div className="flex-1 flex items-center justify-center flex-col text-muted-foreground px-4 py-12 text-center">
                     <BookOpen className="w-12 h-12 mb-4 opacity-20" />
                     <p>Select a trade artifact from the archive to review execution quality.</p>
                 </div>

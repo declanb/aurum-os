@@ -83,25 +83,27 @@ export default function TradePlanner() {
         : "0.00";
 
     return (
-        <div className="flex h-[calc(100vh-8rem)] gap-6">
+        <div className="flex flex-col lg:flex-row lg:h-[calc(100dvh-8rem)] gap-4 lg:gap-6 min-w-0">
 
             {/* Left Sidebar: Trade Setup List */}
-            <GlassCard className="w-80 flex flex-col shrink-0 overflow-hidden">
-                <div className="p-4 border-b border-border flex justify-between items-center bg-muted/50">
+            <GlassCard className="w-full lg:w-80 flex flex-col shrink-0 overflow-hidden lg:min-h-0">
+                <div className="p-3 sm:p-4 border-b border-border flex justify-between items-center bg-muted/50">
                     <h3 className="font-bold text-foreground">Pending Ideas</h3>
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={startNewTrade}>
-                        <FilePlus className="w-4 h-4 text-emerald-500" />
+                    <Button size="icon" variant="ghost" className="size-11 shrink-0" onClick={startNewTrade} aria-label="New trade idea">
+                        <FilePlus className="w-5 h-5 text-emerald-500" />
                     </Button>
                 </div>
-                <div className="flex-1 overflow-y-auto w-full p-2 space-y-2">
+                <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto lg:flex-1 w-full p-2 snap-x snap-mandatory overscroll-x-contain">
                     {trades.map(trade => (
                         <button
                             key={trade.id}
+                            type="button"
                             onClick={() => {
                                 setActiveTrade(trade);
                                 setGuardianResult(null);
                             }}
-                            className={`w-full text-left p-3 rounded-lg border transition-all ${activeTrade.id === trade.id ? 'bg-accent border-primary/50' : 'bg-card border-border hover:bg-accent/50'}`}
+                            aria-pressed={activeTrade.id === trade.id}
+                            className={`snap-start shrink-0 w-[min(16rem,78vw)] lg:w-full lg:shrink text-left p-3 min-h-16 rounded-lg border transition-all ${activeTrade.id === trade.id ? 'bg-accent border-primary/50' : 'bg-card border-border hover:bg-accent/50'}`}
                         >
                             <div className="flex justify-between items-start mb-2">
                                 <div className="flex items-center gap-2">
@@ -119,18 +121,19 @@ export default function TradePlanner() {
             </GlassCard>
 
             {/* Main Workspace */}
-            <div className="flex-1 flex flex-col overflow-y-auto">
+            <div className="flex-1 flex flex-col min-w-0 lg:min-h-0 lg:overflow-y-auto">
                 {/* AI Recommendations Section */}
                 <div className="mb-6">
                     <AiRecommendations onTradeCreated={loadTrades} />
                 </div>
 
-                <div className="flex justify-between items-end mb-6">
-                    <div>
-                        <h1 className="text-3xl font-bold text-foreground mb-2">Trade Planner</h1>
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-end mb-6">
+                    <div className="min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Trade Planner</h1>
                         <p className="text-muted-foreground text-sm">Design structural setups. Invalid parameters will be blocked by the Guardian AI.</p>
                     </div>
                     <Button
+                        className="w-full sm:w-auto min-h-11"
                         onClick={handleSave}
                         disabled={isSaving || activeTrade.status === "Approved" || activeTrade.status === "Sent"}
                     >
@@ -141,10 +144,10 @@ export default function TradePlanner() {
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 pb-8">
 
                     {/* Form Column */}
-                    <GlassCard className="xl:col-span-2 p-6 flex flex-col gap-8">
+                    <GlassCard className="xl:col-span-2 p-4 sm:p-6 flex flex-col gap-6 sm:gap-8 min-w-0">
 
                         {/* Metadata Header */}
-                        <div className="flex items-center gap-6 pb-6 border-b border-border">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6 pb-6 border-b border-border">
                             <div className="flex-1">
                                 <Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Asset</Label>
                                 <div className="text-2xl font-bold text-foreground">{activeTrade.symbol}</div>
@@ -155,14 +158,14 @@ export default function TradePlanner() {
                                     <button
                                         onClick={() => setActiveTrade({ ...activeTrade, direction: 'LONG' })}
                                         disabled={activeTrade.status === "Approved" || activeTrade.status === "Sent"}
-                                        className={`px-6 py-1.5 rounded-md text-sm font-bold transition-all ${activeTrade.direction === 'LONG' ? 'bg-emerald-500/20 text-emerald-500' : 'text-muted-foreground hover:text-foreground'}`}
+                                        className={`min-h-11 px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTrade.direction === 'LONG' ? 'bg-emerald-500/20 text-emerald-500' : 'text-muted-foreground hover:text-foreground'}`}
                                     >
                                         LONG
                                     </button>
                                     <button
                                         onClick={() => setActiveTrade({ ...activeTrade, direction: 'SHORT' })}
                                         disabled={activeTrade.status === "Approved" || activeTrade.status === "Sent"}
-                                        className={`px-6 py-1.5 rounded-md text-sm font-bold transition-all ${activeTrade.direction === 'SHORT' ? 'bg-red-500/20 text-red-500' : 'text-muted-foreground hover:text-foreground'}`}
+                                        className={`min-h-11 px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTrade.direction === 'SHORT' ? 'bg-red-500/20 text-red-500' : 'text-muted-foreground hover:text-foreground'}`}
                                     >
                                         SHORT
                                     </button>
@@ -171,7 +174,7 @@ export default function TradePlanner() {
                         </div>
 
                         {/* Price Logic */}
-                        <div className="grid grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                             <div>
                                 <Label className="text-muted-foreground mb-2 block">Entry Price</Label>
                                 <div className="relative">
@@ -222,7 +225,7 @@ export default function TradePlanner() {
                                     value={activeTrade.thesis || ""}
                                     disabled={activeTrade.status === "Approved" || activeTrade.status === "Sent"}
                                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setActiveTrade({ ...activeTrade, thesis: e.target.value })}
-                                    className="w-full h-32 bg-muted/50 border border-input rounded-xl p-4 text-foreground/80 focus:ring-1 focus:ring-ring outline-none resize-none"
+                                    className="w-full h-32 bg-muted/50 border border-input rounded-xl p-4 text-base md:text-sm text-foreground/80 focus:ring-1 focus:ring-ring outline-none resize-none"
                                     placeholder="Why are you taking this trade? What is the narrative?"
                                 />
                             </div>
@@ -232,7 +235,7 @@ export default function TradePlanner() {
                                     value={activeTrade.invalidation_notes || ""}
                                     disabled={activeTrade.status === "Approved" || activeTrade.status === "Sent"}
                                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setActiveTrade({ ...activeTrade, invalidation_notes: e.target.value })}
-                                    className="w-full h-24 bg-muted/50 border border-input rounded-xl p-4 text-foreground/80 focus:ring-1 focus:ring-ring outline-none resize-none"
+                                    className="w-full h-24 bg-muted/50 border border-input rounded-xl p-4 text-base md:text-sm text-foreground/80 focus:ring-1 focus:ring-ring outline-none resize-none"
                                     placeholder="What specific price action immediately invalidates this idea?"
                                 />
                             </div>
@@ -319,7 +322,7 @@ export default function TradePlanner() {
                             <Button
                                 onClick={handleChallenge}
                                 disabled={isChallenging || (activeTrade.status !== "Draft" && activeTrade.status !== "Needs Work")}
-                                className="w-full justify-between px-4 group"
+                                className="w-full min-h-12 justify-between px-4 group text-base"
                             >
                                 {isChallenging ? "Running..." : "Run Guardian Challenge"}
                                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />

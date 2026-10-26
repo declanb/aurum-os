@@ -76,12 +76,12 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
   const sideColor = side === "buy" ? "emerald" : "red";
 
   return (
-    <div className="flex flex-col h-full bg-card border-l border-border">
+    <div className="flex flex-col h-auto lg:h-full min-h-0 bg-card border-t lg:border-t-0 lg:border-l border-border">
       {/* Buy/Sell Tabs */}
       <div className="grid grid-cols-2 border-b border-border">
         <button
           onClick={() => setSide("buy")}
-          className={`py-3 text-sm font-bold transition-colors ${
+          className={`min-h-12 py-3 text-sm font-bold transition-colors ${
             side === "buy"
               ? "bg-emerald-500/10 text-emerald-500 border-b-2 border-emerald-500"
               : "text-muted-foreground hover:bg-accent border-b-2 border-transparent"
@@ -91,7 +91,7 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
         </button>
         <button
           onClick={() => setSide("sell")}
-          className={`py-3 text-sm font-bold transition-colors ${
+          className={`min-h-12 py-3 text-sm font-bold transition-colors ${
             side === "sell"
               ? "bg-red-500/10 text-red-500 border-b-2 border-red-500"
               : "text-muted-foreground hover:bg-accent border-b-2 border-transparent"
@@ -108,7 +108,7 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
             <button
               key={type}
               onClick={() => setOrderType(type)}
-              className={`flex-1 py-1.5 text-xs font-semibold uppercase rounded transition-colors ${
+              className={`flex-1 min-h-11 py-2 text-xs font-semibold uppercase rounded transition-colors ${
                 orderType === type
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -136,7 +136,7 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
                 type="number"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                className="w-full h-11 px-3 pr-12 text-sm font-mono bg-muted/30 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+                className="w-full h-12 px-3 pr-12 text-base font-mono bg-muted/30 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-semibold">USD</span>
             </div>
@@ -157,7 +157,7 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
                 setSizePercent(0);
               }}
               placeholder="0.00"
-              className="w-full h-11 px-3 pr-16 text-sm font-mono bg-muted/30 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+              className="w-full h-12 px-3 pr-16 text-base font-mono bg-muted/30 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-semibold">
               {symbol.split("/")[0]}
@@ -171,7 +171,7 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
             <button
               key={pct}
               onClick={() => handlePercent(pct)}
-              className={`py-1.5 text-xs font-mono rounded border transition-colors ${
+              className={`min-h-11 py-2 text-sm font-mono rounded border transition-colors ${
                 sizePercent === pct
                   ? `border-${sideColor}-500 bg-${sideColor}-500/10 text-${sideColor}-500`
                   : "border-border bg-muted/30 text-muted-foreground hover:bg-accent"
@@ -193,7 +193,7 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
               value={stopLoss}
               onChange={(e) => setStopLoss(e.target.value)}
               placeholder={(midPrice * (side === "buy" ? 0.99 : 1.01)).toFixed(2)}
-              className="w-full h-10 px-3 text-sm font-mono bg-muted/30 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-red-500/50 text-foreground"
+              className="w-full h-12 px-3 text-base font-mono bg-muted/30 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-red-500/50 text-foreground"
             />
           </div>
           <div>
@@ -205,7 +205,7 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
               value={takeProfit}
               onChange={(e) => setTakeProfit(e.target.value)}
               placeholder={(midPrice * (side === "buy" ? 1.02 : 0.98)).toFixed(2)}
-              className="w-full h-10 px-3 text-sm font-mono bg-muted/30 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-foreground"
+              className="w-full h-12 px-3 text-base font-mono bg-muted/30 border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-foreground"
             />
           </div>
         </div>
@@ -249,7 +249,7 @@ export function TradePanel({ symbol, midPrice, availableBalance, onTradeStaged }
         <Button
           onClick={handleSubmit}
           disabled={isSubmitting || !amount}
-          className={`w-full h-12 text-sm font-bold uppercase tracking-wider ${
+          className={`w-full min-h-12 h-12 text-base font-bold uppercase tracking-wider ${
             side === "buy"
               ? "bg-emerald-500 hover:bg-emerald-600 text-white"
               : "bg-red-500 hover:bg-red-600 text-white"
