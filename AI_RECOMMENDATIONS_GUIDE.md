@@ -231,6 +231,16 @@ To minimize costs:
 - Start with 2-3 symbols instead of analyzing many pairs
 - Consider using GPT-3.5-turbo for cheaper analysis (edit model in `ai_advisor.py`)
 
+## Public trend context (optional)
+
+Set `AURUM_TREND_CONTEXT=1` to attach a read-only public scan to each recommendation: CoinGecko BTC dominance and 24h market-cap change, the alternative.me Fear & Greed index, and CoinDesk headlines. Add a read-only `X_BEARER_TOKEN` if you also want X API v2 recent search. Leave the token empty to skip X. The loader never posts and never logs the token.
+
+Ask for the same read in Copilot Chat by selecting the **Revolut X Trend Expert** agent (`.github/agents/revolut-x-trend-expert.agent.md`). That agent does not write code or place orders.
+
+The scan shows up as `trend_regime` / `trend_sources` on the recommendation and as a `Regime …` suffix when scout stages a TradeIdea. It does not create an ExecutionTicket. You still approve and click Execute. Details and kill switches are in `AGENTS.md` and `.github/copilot-instructions.md`.
+
+`GET /api/recommendations/?include_trends=true` forces the scan for one request even when the env flag is off.
+
 ## Next Steps
 
 1. Review the recommendations in the Trade Planner

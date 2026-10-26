@@ -13,6 +13,7 @@ the GitHub Models fallback). ``ai_advisor`` owns the decision of when to call
 this module and still applies playbook/edge decoration on the results.
 
 All recommendations remain advisory — Guardian validation is still required.
+Optional public trend context is prompt text only. This module does not place orders.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from api.core.config import settings
 from api.services import market_data
 from api.services.playbooks import Playbook, format_briefing
 from api.services.personal_edge import format_edge_block
+from api.services.trend_context import format_block
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +81,11 @@ def _build_tools() -> list:
     return [fetch_price, fetch_candles, fetch_indicators]
 
 
-def _build_instructions(playbook: Playbook, edge_fingerprint: Optional[dict]) -> str:
+def _build_instructions(
+    playbook: Playbook,
+    edge_fingerprint: Optional[dict],
+    trend_context: Optional[dict] = None,
+) -> str:
     """Compose the agent's system instructions (mirrors ai_advisor's GPT path)."""
     blocks = [
         (
@@ -98,15 +104,22 @@ def _build_instructions(playbook: Playbook, edge_fingerprint: Optional[dict]) ->
     edge_block = format_edge_block(edge_fingerprint)
     if edge_block:
         blocks.append(edge_block)
+    trend_block = format_block(trend_context)
+    if trend_block:
+        blocks.append(trend_block)
     return "\n\n".join(blocks)
 
 
-def _build_agent(playbook: Playbook, edge_fingerprint: Optional[dict]):
+def _build_agent(
+    playbook: Playbook,
+    edge_fingerprint: Optional[dict],
+    trend_context: Optional[dict] = None,
+):
     from agents import Agent, ModelSettings
 
     return Agent(
         name="Aurum Scout",
-        instructions=_build_instructions(playbook, edge_fingerprint),
+        instructions=_build_instructions(playbook, edge_fingerprint, trend_context),
         model=settings.OPENAI_MODEL,
         model_settings=ModelSettings(temperature=0.3, max_tokens=1200),
         tools=_build_tools(),
@@ -153,16 +166,22 @@ async def generate_recommendation(
     symbol: str,
     playbook: Playbook,
     edge_fingerprint: Optional[dict] = None,
+    trend_context: Optional[dict] = None,
 ) -> Optional[dict]:
     """Run the agent for a single symbol and return a recommendation dict (or None)."""
     from agents import Runner
 
-    agent = _build_agent(playbook, edge_fingerprint)
+    agent = _build_agent(playbook, edge_fingerprint, trend_context)
     user_msg = (
         f"Analyze {symbol} through the active playbook. Use fetch_price, "
         f"fetch_indicators (1h and 4h), and fetch_candles as needed, then return "
         f"your single best recommendation. If nothing fits, return direction=null."
     )
+    if trend_context:
+        user_msg += (
+            " Public trend context is in your instructions. Use it as context only. "
+            "It does not authorize an order."
+        )
     try:
         result = await Runner.run(agent, user_msg, max_turns=8)
     except Exception as exc:
@@ -181,6 +200,7 @@ async def generate_recommendations(
     symbols: list[str],
     playbook: Playbook,
     edge_fingerprint: Optional[dict] = None,
+    trend_context: Optional[dict] = None,
 ) -> list[dict]:
     """Run the agent across symbols, returning bare recommendation dicts.
 
@@ -189,7 +209,9 @@ async def generate_recommendations(
     """
     recommendations: list[dict] = []
     for symbol in symbols:
-        rec = await generate_recommendation(symbol, playbook, edge_fingerprint)
+        rec = await generate_recommendation(
+            symbol, playbook, edge_fingerprint, trend_context=trend_context
+        )
         if rec:
             recommendations.append(rec)
     return recommendations

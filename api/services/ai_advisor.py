@@ -17,6 +17,7 @@ from api.core.config import settings
 from api.services import market_data
 from api.services.playbooks import Playbook, get_playbook, format_briefing
 from api.services.personal_edge import format_edge_block, score_match
+from api.services.trend_context import format_block, load as load_trend_context
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +67,50 @@ def _calculate_indicators(candles: list[dict]) -> dict:
     }
 
 
+async def _resolve_trend_context(
+    trend_context: Optional[dict],
+    include_trends: Optional[bool],
+) -> Optional[dict]:
+    """Load public trend context when requested. Failures stay advisory-empty.
+
+    ``include_trends=None`` follows ``AURUM_TREND_CONTEXT``. An explicit dict
+    from the caller is used as-is and skips the network.
+    """
+    if trend_context is not None:
+        return trend_context
+    enabled = settings.AURUM_TREND_CONTEXT if include_trends is None else include_trends
+    if not enabled:
+        return None
+    try:
+        ctx = await load_trend_context()
+    except Exception as exc:
+        logger.warning("Trend context unavailable: %s", type(exc).__name__)
+        return None
+    logger.info(
+        "Trend context attached (regime=%s sources=%s)",
+        ctx.get("regime_hint"),
+        ",".join(ctx.get("sources") or []),
+    )
+    return ctx
+
+
+def _attach_trend(recommendations: list[dict], trend_context: Optional[dict]) -> list[dict]:
+    """Stamp regime metadata onto recs. Does not create trades or orders."""
+    if not trend_context:
+        return recommendations
+    for rec in recommendations:
+        rec["trend_regime"] = trend_context.get("regime_hint") or "unclear"
+        rec["trend_sources"] = list(trend_context.get("sources") or [])
+    return recommendations
+
+
 async def generate_recommendations(
     symbols: Optional[list[str]] = None,
     max_recommendations: int = 3,
     playbook_id: Optional[str] = None,
     edge_fingerprint: Optional[dict] = None,
+    trend_context: Optional[dict] = None,
+    include_trends: Optional[bool] = None,
 ) -> list[dict]:
     """
     Analyze market data and generate AI-powered trade recommendations.
@@ -78,17 +118,23 @@ async def generate_recommendations(
     The LLM is biased by:
       - A named trader playbook (Wyckoff, ICT, trend-follower, macro, Livermore).
       - The user's personal edge fingerprint (their own approved-trade history).
+      - Optional public trend context (CoinGecko, Fear & Greed, headlines, X search).
 
     Returns a list of recommendation dicts with:
     - symbol, direction, confidence_score (0-100)
     - entry_price, stop_price, target_price
     - thesis, reasoning, timeframe
     - playbook_used, edge_match_score (when available)
+    - trend_regime, trend_sources (when trend context was attached)
+
+    Advisory only. Callers stage a TradeIdea; a human execute click is required
+    before any broker order.
     """
     if symbols is None:
         symbols = ["BTC-USD", "ETH-USD", "SOL-USD"]
 
     playbook = get_playbook(playbook_id)
+    trend_context = await _resolve_trend_context(trend_context, include_trends)
 
     # Check if either GitHub Models or OpenAI is available
     api_key = settings.OPENAI_API_KEY
@@ -97,10 +143,13 @@ async def generate_recommendations(
     
     if not github_token and not has_openai:
         logger.warning("Neither GITHUB_TOKEN nor OPENAI_API_KEY configured — returning mock recommendations")
-        return _decorate_mock(
-            _generate_mock_recommendations(symbols[:max_recommendations]),
-            playbook,
-            edge_fingerprint,
+        return _attach_trend(
+            _decorate_mock(
+                _generate_mock_recommendations(symbols[:max_recommendations]),
+                playbook,
+                edge_fingerprint,
+            ),
+            trend_context,
         )
 
     # OpenAI Agents SDK path: the model calls tools to fetch its own market data,
@@ -113,6 +162,7 @@ async def generate_recommendations(
             symbols=symbols[:max_recommendations],
             playbook=playbook,
             edge_fingerprint=edge_fingerprint,
+            trend_context=trend_context,
         )
         for rec in recommendations:
             rec["playbook_used"] = {
@@ -127,7 +177,7 @@ async def generate_recommendations(
                 len(symbols),
                 playbook["id"],
             )
-        return recommendations
+        return _attach_trend(recommendations, trend_context)
 
     recommendations = []
 
@@ -155,6 +205,7 @@ async def generate_recommendations(
                 candles_1h=candles_1h[-10:],  # Last 10 candles for context
                 playbook=playbook,
                 edge_fingerprint=edge_fingerprint,
+                trend_context=trend_context,
             )
 
             if recommendation:
@@ -175,7 +226,7 @@ async def generate_recommendations(
     if not recommendations:
         logger.info(f"GPT found no high-confidence setups across {len(symbols)} symbols with {playbook['id']} playbook")
 
-    return recommendations
+    return _attach_trend(recommendations, trend_context)
 
 
 def _decorate_mock(mocks: list[dict], playbook: Playbook, edge: Optional[dict]) -> list[dict]:
@@ -198,6 +249,7 @@ async def _analyze_with_gpt(
     candles_1h: list[dict],
     playbook: Playbook,
     edge_fingerprint: Optional[dict] = None,
+    trend_context: Optional[dict] = None,
 ) -> Optional[dict]:
     """Call GPT-4 to analyze market data and generate a trade recommendation."""
     try:
@@ -247,6 +299,9 @@ async def _analyze_with_gpt(
         edge_block = format_edge_block(edge_fingerprint)
         if edge_block:
             system_blocks.append(edge_block)
+        trend_block = format_block(trend_context)
+        if trend_block:
+            system_blocks.append(trend_block)
 
         response = await client.chat.completions.create(
             model=settings.OPENAI_MODEL,  # Defaults to gpt-4o-mini (cost protection)

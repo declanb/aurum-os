@@ -31,6 +31,14 @@ logger = logging.getLogger(__name__)
 MOCK_USER_ID = "seed_user"  # matches the rest of the codebase
 
 
+def _regime_suffix(rec: dict) -> str:
+    """Append a fetched regime label to the staged thesis. Never invents one."""
+    regime = rec.get("trend_regime")
+    if regime in {"risk_on", "risk_off", "unclear"}:
+        return f" · Regime {regime}"
+    return ""
+
+
 def _recent_auto_approval_count(session: Session) -> int:
     """Count TradeIdeas auto-approved in the last 24h (rolling)."""
     since = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -113,6 +121,7 @@ def try_auto_approve(
         f"[AUTO] {rec.get('thesis', '')[:140]} · "
         f"Lens: {playbook.get('name', 'n/a')} · "
         f"Conf {rec.get('confidence_score')} · Edge {rec.get('edge_match_score')}"
+        f"{_regime_suffix(rec)}"
     )
 
     trade = TradeIdea(
@@ -216,6 +225,7 @@ def stage_recommendation(
         f"[SCOUT] {rec.get('thesis', '')[:140]} · "
         f"Lens: {playbook.get('name', 'n/a')} · "
         f"Conf {rec.get('confidence_score')} · R:R {rec.get('risk_reward')}"
+        f"{_regime_suffix(rec)}"
     )
 
     trade = TradeIdea(

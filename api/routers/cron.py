@@ -23,7 +23,7 @@ from sqlmodel import Session, select
 from api.core.config import settings
 from api.core.db import engine
 from api.models.trade import TradeIdea as Trade
-from api.services import ai_advisor, auto_approver, revolut_x_client as rx
+from api.services import agent_registry, ai_advisor, auto_approver, revolut_x_client as rx
 from api.services.personal_edge import compute_edge_fingerprint
 
 router = APIRouter(tags=["cron"])
@@ -71,6 +71,10 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
     # Global kill switch
     if not settings.AURUM_AGENTS_ENABLED:
         return {"status": "disabled", "reason": "AURUM_AGENTS_ENABLED=false"}
+
+    # Same pause flag the local fleet honors. Stops new ideas; does not place orders.
+    if agent_registry.is_paused():
+        return {"status": "paused", "reason": "AURUM_AGENTS_PAUSED or registry pause"}
     
     # Rate limit (belt-and-suspenders)
     if not _check_rate_limit("scout", min_interval_seconds=25 * 60):  # 25min min

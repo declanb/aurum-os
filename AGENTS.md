@@ -1,6 +1,8 @@
 # Aurum Agent Fleet
 
-Aurum runs multiple autonomous agents that coordinate via a shared registry. Each agent handles one concern and registers itself so others can see what's running.
+Product brand: **Helm**. The git repo and code identifiers stay `aurum-os`.
+
+Aurum runs multiple autonomous agents that coordinate via a shared registry. Each agent handles one concern and registers itself so others can see what's running. The Revolut X account behind this stack is live — recommendations can be staged, and only a human Execute click sends an order.
 
 ## Architecture
 
@@ -35,7 +37,7 @@ Shared coordination:  /tmp/aurum_agents.json
 
 **What it does:**
 - Every 15 minutes:
-  1. Fetches AI recommendations via `ai_advisor` (using your selected playbook)
+  1. Fetches AI recommendations via `ai_advisor` (using your selected playbook). When `AURUM_TREND_CONTEXT=1`, the prompt also includes public trend context (see below). That context does not place an order.
   2. Computes your personal edge from approved-trade history
   3. Scores each recommendation against thresholds
   4. Auto-approves winners (if not already claimed by profit_hunter)
@@ -92,6 +94,35 @@ python -m api.services.profit_hunter \
 pkill -f "profit_hunter.*BTC"
 ```
 
+Its safety model is unchanged: net P&L versus the target, a hard slippage cap, quantity limited to the coins actually held, and a single position. Do not loosen the sell or add a retry. Pause still skips the next action (`AURUM_AGENTS_PAUSED=1` or `POST /api/agent/pause`).
+
+### 3. Copilot — Revolut X Trend Expert (advisory)
+
+Not a long-running process. This is a user-invocable GitHub Copilot custom agent.
+
+**File:** `.github/agents/revolut-x-trend-expert.agent.md`  
+**Coding guardrails (every Copilot that edits this repo):** `.github/copilot-instructions.md`  
+**Mentor persona (also advisory, no code):** `.github/agents/trading-guru.agent.md`
+
+**Invoke:** In Copilot Chat on github.com or in VS Code, open the agent picker and choose **Revolut X Trend Expert**. Ask for a regime read or a public-trend check. It searches public X/Twitter posts, headlines, and BTC dominance / risk-on cues, then returns regime, Revolut X spot symbols, thesis, invalidation, pitfall watch, and confidence.
+
+It does not write code and does not place, cancel, or modify orders. Hand the read to a human or let scout stage a `TradeIdea`. Trading Guru stays the voice for discipline and "should I take this?" questions.
+
+**Signal flow** (`AURUM_TREND_CONTEXT=1`, off by default):
+
+1. `api/services/trend_context.py` reads public sources only: CoinGecko `/global`, alternative.me Fear & Greed, CoinDesk RSS, and X API v2 recent search when `X_BEARER_TOKEN` is set. GET only. No posting. Missing fields are omitted.
+2. `ai_advisor.generate_recommendations` puts that block in the Chat Completions prompt and, when `AURUM_USE_AGENTS_SDK=1`, in the OpenAI Agents advisor instructions.
+3. Scout (`scout_agent` and `GET /api/cron/scout`) and `GET /api/recommendations/?include_trends=true` use the same function.
+4. Output is a recommendation. Scout may stage a `TradeIdea` on the Approvals queue (thesis gains a `Regime risk_on|risk_off|unclear` suffix). Auto-approve may mark it Approved. An `ExecutionTicket` is created only after an `ApprovalEvent` and a human Execute click.
+
+```bash
+AURUM_TREND_CONTEXT=1
+X_BEARER_TOKEN=          # optional read-only bearer; empty skips X
+X_TREND_QUERY=(bitcoin OR ethereum OR solana) lang:en -is:retweet
+```
+
+Do not commit a real `X_BEARER_TOKEN`. The loader never logs it.
+
 ## Agent Registry (`/tmp/aurum_agents.json`)
 
 Shared JSON file where agents register on startup + heartbeat every ~60s.
@@ -108,7 +139,8 @@ Shared JSON file where agents register on startup + heartbeat every ~60s.
     "metadata": {
       "playbook": "wyckoff",
       "symbols": ["BTC-USD", "ETH-USD", "SOL-USD"],
-      "poll_minutes": 15
+      "poll_minutes": 15,
+      "trend_context": false
     }
   },
   "profit_hunter_btc": {
@@ -193,6 +225,16 @@ AUTO_APPROVE_MAX_PER_DAY=3
 AUTO_APPROVE_ALLOW_SHORTS=false
 ```
 
+### Public trend context
+
+```bash
+AURUM_TREND_CONTEXT=1
+X_BEARER_TOKEN=
+X_TREND_QUERY=(bitcoin OR ethereum OR solana) lang:en -is:retweet
+```
+
+Feeds the advisor prompt only. See "Revolut X Trend Expert" above. Real funds: this still ends at Approvals.
+
 ### Pause all agents
 
 Set env var:
@@ -205,6 +247,8 @@ Or via API:
 curl -X POST http://localhost:8000/api/agent/pause
 ```
 
+Vercel cron (scout and profit-hunter ticks) stops when `AURUM_AGENTS_ENABLED=false`. Cron scout also honors the pause flag above before it generates ideas. The pause file lives on local disk (`/tmp/aurum_agents.json`); on serverless, set `AURUM_AGENTS_PAUSED=1` or `AURUM_AGENTS_ENABLED=false` in the project env so the switch survives a new instance.
+
 ## Safety
 
 1. **No auto-execution** — scout only auto-approves TradeIdeas. You still manually click "Execute" to place the broker order.
@@ -212,7 +256,9 @@ curl -X POST http://localhost:8000/api/agent/pause
 3. **Daily cap** — max 3 auto-approvals per 24h (rolling window).
 4. **Personal-edge filter** — only auto-approves symbols you've historically traded.
 5. **Guardian checks** — all structural rules (R:R, thesis, invalidation) still enforced.
-6. **Global pause** — one flag stops all agents instantly.
+6. **Global pause** — `POST /api/agent/pause` or `AURUM_AGENTS_PAUSED=1` makes local agents skip their next action. `AURUM_AGENTS_ENABLED=false` is the cron kill switch.
+7. **Real funds** — broker writes need an `ApprovalEvent` and a human Execute click. Trend context and Copilot agents stop at a `TradeIdea`. No silent retry of place/cancel/modify (a retry can double-fill). Never log credentials or `X_BEARER_TOKEN`.
+8. **profit_hunter stays strict** — slippage cap, held quantity only, single position. Do not loosen auto-sell.
 
 ## Typical Workflow
 

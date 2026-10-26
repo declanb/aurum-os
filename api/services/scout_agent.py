@@ -24,6 +24,8 @@ Safety:
   - Checks EUR balance before attempting any approval.
   - Enforces daily cap (AUTO_APPROVE_MAX_PER_DAY).
   - Clean shutdown on SIGINT/SIGTERM (unregisters).
+  - Optional trend context (AURUM_TREND_CONTEXT) is prompt text only.
+    Staging ends at a TradeIdea. Execute stays a human click.
 """
 
 from __future__ import annotations
@@ -78,6 +80,7 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
             "playbook": playbook_id,
             "symbols": symbols,
             "poll_minutes": poll_minutes,
+            "trend_context": bool(settings.AURUM_TREND_CONTEXT),
         },
     )
     logger.info("Scout agent started (playbook=%s, symbols=%s, poll=%dm)", playbook_id, symbols, poll_minutes)

@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     # OpenAI's Responses API and does NOT use the GitHub Models fallback.
     AURUM_USE_AGENTS_SDK: bool = False
 
+    # ── Public trend context (read-only; advisory prompt input) ──────────────
+    # When set, ai_advisor loads CoinGecko / Fear & Greed / headlines (and X
+    # recent search if X_BEARER_TOKEN is set) and attaches them to the prompt.
+    # The token itself is read from the environment inside trend_context.py and
+    # is intentionally not a Settings field, so it is never repr'd with config.
+    # This flag does not place orders. Recommendations still end at TradeIdea.
+    AURUM_TREND_CONTEXT: bool = False
+    X_TREND_QUERY: str = "(bitcoin OR ethereum OR solana) lang:en -is:retweet"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
