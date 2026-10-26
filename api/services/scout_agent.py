@@ -115,7 +115,14 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
                 logger.warning("Edge fingerprint unavailable: %s", exc)
                 edge = None
             
-            # Generate recommendations
+            # Generate recommendations. trend_scout, when AURUM_TREND_SCOUT=1,
+            # attaches read-only SignalBundles inside ai_advisor. It does not
+            # approve or execute.
+            if settings.AURUM_TREND_SCOUT:
+                logger.info(
+                    "[Iter %d] AURUM_TREND_SCOUT=1 — read-only SignalBundles via ai_advisor (no broker calls)",
+                    iteration,
+                )
             try:
                 recs = await ai_advisor.generate_recommendations(
                     symbols=symbols,

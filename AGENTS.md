@@ -2,6 +2,10 @@
 
 Aurum runs multiple autonomous agents that coordinate via a shared registry. Each agent handles one concern and registers itself so others can see what's running.
 
+The Helm recommendation path (signal → idea → human execute → exit), the `SignalBundle` / `TradeIdea` contracts, and the Revolut rules are in [docs/HELM_AGENT_FLEET.md](docs/HELM_AGENT_FLEET.md).
+
+`trend_scout` is read-only and **off by default** (`AURUM_TREND_SCOUT=0`). It does not call the broker. Set `AURUM_TREND_SCOUT=1` to let `ai_advisor` attach untrusted SignalBundles as context. `AURUM_TREND_SCOUT_NETWORK=1` turns on allowlisted public feeds; otherwise the bundles are fixtures. Orders still need an `ApprovalEvent` and a human execute click.
+
 ## Architecture
 
 ```
