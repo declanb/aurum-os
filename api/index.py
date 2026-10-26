@@ -13,7 +13,9 @@ from api.routers import cron
 app = FastAPI(
     title="AURUM OS API",
     description="Backend for the AI-native gold trading copilot",
-    version="1.0.0"
+    version="1.0.0",
+    # Vercel strips trailing slashes (308); FastAPI would 307 back → loop.
+    redirect_slashes=False,
 )
 
 # Standard permissive CORS for local dev. Tighten in production.

@@ -41,6 +41,7 @@ async def get_edge(user_id: Optional[str] = Query(None)) -> dict:
 
 
 @router.get("/", response_model=List[dict])
+@router.get("", response_model=List[dict], include_in_schema=False)
 async def get_recommendations(
     symbols: Optional[str] = Query(None, description="Comma-separated list of symbols (e.g., 'BTC-USD,ETH-USD')"),
     max_results: int = Query(3, ge=1, le=10, description="Maximum number of recommendations to return"),
