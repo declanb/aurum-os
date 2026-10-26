@@ -22,8 +22,9 @@ from api.services.exit_bracket import (
     bracket_for_exit_trade,
     bracket_to_dict,
     mark_exit_filled,
-    open_brackets_by_symbol,
 )
+from api.services.live_positions import LivePositionsError, build_live_positions
+from api.services.profit_notifications import attach_profit_notifications
 from api.services.revolut_x_client import get_status
 
 logger = logging.getLogger(__name__)
@@ -143,117 +144,16 @@ async def live_positions(session: Session = Depends(get_session)):
     - Broker balance > 0 is the gate (no balance → no position, regardless of DB).
     - DB tickets supply entry_price / cost_eur / fees.
     - Tickers supply live bid/ask for P&L.
+
+    A positive unrealised PnL is also stored once as a Helm profit notification.
+    That write does not place a sell.
     """
-    # 1. Live balances
     try:
-        acc = await market_data.get_account_info()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Failed to fetch account: {e}")
-
-    balances = (acc or {}).get("balances") or []
-    cash_eur = next((float(b.get("balance") or 0) for b in balances if (b.get("currency") or "").upper() == "EUR"), 0.0)
-    held = [
-        {
-            "currency": (b.get("currency") or "").upper(),
-            "qty": float(b.get("balance") or 0),
-            "available": float(b.get("available") or 0),
-            "staked": float(b.get("staked") or 0),
-            "reserved": float(b.get("reserved") or 0),
-        }
-        for b in balances
-        if (b.get("currency") or "").upper() != "EUR" and float(b.get("balance") or 0) > 0
-    ]
-
-    # 2. Live tickers for held symbols (assume <ASSET>-EUR pairing on Revolut X)
-    symbols = [f"{h['currency']}-EUR" for h in held]
-    ticker_map: dict = {}
-    if symbols:
-        try:
-            tickers = await market_data.get_tickers(symbols)
-            for t in tickers or []:
-                sym = (t.get("symbol") or "").replace("/", "-").upper()
-                ticker_map[sym] = t
-        except Exception as e:
-            # Don't fail the whole call — surface empty tickers instead
-            ticker_map = {}
-
-    # 3. DB tickets — get latest BUY fill per symbol with fill_qty > 0
-    from sqlalchemy import desc
-    tickets = session.exec(
-        select(ExecutionTicket)
-        .where(ExecutionTicket.side == "buy")
-        .where(ExecutionTicket.fill_qty != None)  # noqa: E711
-        .order_by(desc(ExecutionTicket.filled_at), desc(ExecutionTicket.id))
-    ).all()
-
-    ticket_by_symbol: dict = {}
-    for t in tickets:
-        if not t.symbol:
-            continue
-        sym = t.symbol.upper()
-        if sym not in ticket_by_symbol:
-            ticket_by_symbol[sym] = t
-
-    TAKER_FEE = 0.0009
-    exit_by_symbol = open_brackets_by_symbol(session)
-
-    positions: list = []
-    for h in held:
-        sym = f"{h['currency']}-EUR"
-        ticker = ticker_map.get(sym) or {}
-        bid = float(ticker.get("bid") or 0)
-        ask = float(ticker.get("ask") or 0)
-
-        ticket = ticket_by_symbol.get(sym)
-        entry_price = float(ticket.fill_price) if (ticket and ticket.fill_price) else None
-        cost_eur = (
-            float(ticket.fill_qty) * float(ticket.fill_price)
-            if (ticket and ticket.fill_qty and ticket.fill_price)
-            else None
-        )
-        fees_eur = float(ticket.fees_eur) if (ticket and ticket.fees_eur) else 0.0
-        broker_order_id = ticket.broker_order_id if ticket else None
-
-        current_value = h["qty"] * bid * (1 - TAKER_FEE) if bid else 0.0
-        pnl = (current_value - cost_eur) if (cost_eur is not None and current_value) else None
-        pnl_pct = (pnl / cost_eur * 100) if (pnl is not None and cost_eur) else None
-
-        positions.append({
-            "symbol": sym,
-            "asset": h["currency"],
-            "qty": h["qty"],
-            "available": h["available"],
-            "staked": h["staked"],
-            "reserved": h["reserved"],
-            "tradeable": h["available"] > 0,
-            "is_staked": h["staked"] > 0 and h["available"] == 0,
-            "bid": bid,
-            "ask": ask,
-            "entry_price": entry_price,
-            "cost_eur": cost_eur,
-            "fees_eur": fees_eur,
-            "current_value_eur": current_value,
-            "pnl_eur": pnl,
-            "pnl_pct": pnl_pct,
-            "has_db_record": ticket is not None,
-            "broker_order_id": broker_order_id,
-            "exit": exit_by_symbol.get(sym),
-        })
-
-    total_value = sum(p["current_value_eur"] for p in positions)
-    total_cost = sum((p["cost_eur"] or 0) for p in positions)
-    total_pnl = sum((p["pnl_eur"] or 0) for p in positions if p["pnl_eur"] is not None)
-
-    return {
-        "cash_eur": cash_eur,
-        "positions_value_eur": total_value,
-        "total_account_eur": cash_eur + total_value,
-        "invested_eur": total_cost,
-        "total_pnl_eur": total_pnl,
-        "positions": positions,
-        "count": len(positions),
-        "unmatched_count": sum(1 for p in positions if not p["has_db_record"]),
-    }
+        payload = await build_live_positions(session)
+    except LivePositionsError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    attach_profit_notifications(session, payload.get("positions") or [])
+    return payload
 
 
 # \u2500\u2500 Trade Execution \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500

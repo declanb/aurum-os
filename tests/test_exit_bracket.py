@@ -382,7 +382,10 @@ def test_paper_mode_auto_closes_without_broker(monkeypatch):
 def test_hunt_cron_source_does_not_place_orders():
     import api.routers.cron as cron
 
-    assert "place_order" not in inspect.getsource(cron.hunt_tick)
+    source = inspect.getsource(cron.hunt_tick)
+    assert "place_order" not in source
+    assert "execute_trade" not in source
+    assert "_record_profit_notifications" in source
 
 
 def test_profit_hunter_live_sell_is_signal_only(monkeypatch):

@@ -426,6 +426,7 @@ export type LivePosition = {
     pnl_pct: number | null;
     has_db_record: boolean;
     broker_order_id: string | null;
+    entry_ticket_id?: number | null;
     exit?: ExitBracketView | null;
 };
 
@@ -500,6 +501,77 @@ export async function fetchLivePositions(): Promise<LivePositionsResponse | null
         return res.json();
     } catch (error) {
         console.error("fetchLivePositions failed:", error);
+        return null;
+    }
+}
+
+// ── Helm profit notifications (in-app; no broker write) ────────────────────
+
+export type ProfitNotification = {
+    id: number;
+    kind: "in_profit" | "take_profit" | "exit_filled" | string;
+    symbol: string;
+    position_key: string;
+    pnl_eur: number | null;
+    pnl_pct: number | null;
+    qty: number | null;
+    entry_price: number | null;
+    mark_price: number | null;
+    title: string;
+    body: string;
+    read: boolean;
+    read_at: string | null;
+    created_at: string | null;
+};
+
+export type ProfitNotificationList = {
+    count: number;
+    unread_count: number;
+    notifications: ProfitNotification[];
+    created?: number;
+    source?: string;
+};
+
+export async function fetchProfitNotifications(): Promise<ProfitNotificationList | null> {
+    try {
+        const res = await fetch(`${API_URL}/notifications`);
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error("fetchProfitNotifications failed:", error);
+        return null;
+    }
+}
+
+export async function scanProfitNotifications(): Promise<ProfitNotificationList | null> {
+    try {
+        const res = await fetch(`${API_URL}/notifications/scan`, { method: "POST" });
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error("scanProfitNotifications failed:", error);
+        return null;
+    }
+}
+
+export async function markProfitNotificationRead(id: number): Promise<ProfitNotificationList | null> {
+    try {
+        const res = await fetch(`${API_URL}/notifications/${id}/read`, { method: "POST" });
+        if (!res.ok) return null;
+        return fetchProfitNotifications();
+    } catch (error) {
+        console.error("markProfitNotificationRead failed:", error);
+        return null;
+    }
+}
+
+export async function markAllProfitNotificationsRead(): Promise<ProfitNotificationList | null> {
+    try {
+        const res = await fetch(`${API_URL}/notifications/read-all`, { method: "POST" });
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error("markAllProfitNotificationsRead failed:", error);
         return null;
     }
 }

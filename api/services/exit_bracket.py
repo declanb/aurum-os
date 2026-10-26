@@ -85,6 +85,20 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _safe_profit_notify(fn_name: str, session: Session, bracket: ExitBracket, price: Optional[float]) -> None:
+    """Record a Helm profit ping without blocking the exit proposal or fill.
+
+    A notification failure must not roll back the EXIT idea or the ticket.
+    This does not place a broker order.
+    """
+    try:
+        from api.services import profit_notifications
+
+        getattr(profit_notifications, fn_name)(session, bracket, price)
+    except Exception:
+        logger.exception("Helm profit notification (%s) failed for bracket #%s", fn_name, bracket.id)
+
+
 def _aware(dt: Optional[datetime]) -> Optional[datetime]:
     if dt is None:
         return None
@@ -351,6 +365,8 @@ def _propose_exit(session: Session, bracket: ExitBracket, bid: float, reason: st
         "Proposed EXIT idea #%s for bracket #%s %s reason=%s",
         idea.id, bracket.id, bracket.symbol, reason,
     )
+    if reason == "take_profit":
+        _safe_profit_notify("notify_take_profit", session, bracket, bid)
     return idea
 
 
@@ -377,6 +393,7 @@ def mark_exit_filled(
             entry.status = "Closed"
             entry.updated_at = now
             session.add(entry)
+        _safe_profit_notify("notify_exit_filled", session, bracket, fill_price or bracket.last_price)
     elif adapter_status in {"Open", "PartiallyFilled", "PaperOpen"}:
         bracket.status = "closing"
         exit_trade.status = "Sent"

@@ -45,3 +45,25 @@ Rejecting an exit idea cancels that proposal. Helm waits until price trades back
 - Live positions (`GET /api/revolut-x/positions/live`) include an `exit` object per symbol
 - Open trades and My Trade show the same status
 - Approvals queue shows `EXIT` ideas. Execute on those sells the bracket quantity and ignores a quote-EUR buy amount
+
+## Profit notifications
+
+Helm stores an in-app ping when a held spot long's unrealised PnL first goes above zero, when a take-profit EXIT idea is created, and when an exit fill is profitable. PnL is the My Trade number: bid (or fill) after the 0.09% taker fee, minus entry cost. The phone shell shows a badge and a banner with the symbol and the euro and percent amounts.
+
+The same position is not pinged on every poll. Dedupe keys are unique:
+
+| Event | Key | Fires again |
+| --- | --- | --- |
+| First green | `in_profit:{position}` | Only for a new position key |
+| Take-profit idea | `take_profit:idea:{id}` | A later EXIT idea after a reject and a fresh proposal. Not while that idea sits in Approvals |
+| Profitable fill | `exit_filled:bracket:{id}` | A different bracket |
+
+`position` is `bracket:{id}` when a bracket is armed, otherwise `ticket:{id}`, then `order:{broker_order_id}`, then `held:{SYMBOL}`. Crossing back below zero and up again does not ping. A loss-making stop-out does not ping. A fill older than 36 hours is not backfilled.
+
+Nothing on this path places, cancels, or modifies a Revolut X order. A live sell still needs an ApprovalEvent and Execute.
+
+Where it runs:
+
+- `GET /api/cron/hunt` records pings on the existing Hobby cron (once a day). A paused fleet still records pings and still does not propose exits. `AURUM_AGENTS_ENABLED=false` skips the tick.
+- The open Helm app calls `POST /api/notifications/scan` about once a minute, and My Trade's live positions read records the same events, so a green flip shows up on the phone without waiting for the daily cron.
+- `GET /api/notifications` and `GET /api/notifications/events` are read-only. Pass `since_id` (last seen id, or 0) for a room bot; those results are oldest-first. Omit it for the newest-first list the app uses.
