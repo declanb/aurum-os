@@ -14,6 +14,7 @@ import {
     Bot,
     MessageCircle,
     MoreHorizontal,
+    ListChecks,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BalancePill } from "@/components/BalancePill";
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
     { href: "/app/exchange", icon: LineChart, label: "Exchange" },
     { href: "/app/agents", icon: Bot, label: "Agents" },
     { href: "/app/guru", icon: MessageCircle, label: "Guru" },
+    { href: "/app/recommendations", icon: ListChecks, label: "Recommendations" },
     { href: "/app/approvals", icon: ShieldAlert, label: "Approvals" },
     { href: "/app/planner", icon: FileText, label: "Planner" },
     { href: "/app/journal", icon: BookOpen, label: "Journal" },
@@ -40,6 +42,7 @@ const MOBILE_TABS = [
 ];
 
 const MORE_ITEMS = [
+    { href: "/app/recommendations", icon: ListChecks, label: "Recommendations" },
     { href: "/app/planner", icon: FileText, label: "Planner" },
     { href: "/app/journal", icon: BookOpen, label: "Journal" },
     { href: "/app/agents", icon: Bot, label: "Agents" },

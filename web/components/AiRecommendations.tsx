@@ -1,16 +1,20 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Sparkles, TrendingUp, TrendingDown, Target, Shield, Zap, RefreshCw, BookOpen, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { PipelineIdeas } from "@/components/PipelineIdeas";
 import {
   fetchRecommendations,
   fetchPlaybooks,
   fetchEdge,
+  fetchTradesResult,
   createTrade,
   type TradeRecommendation,
+  type TradeIdea,
   type PlaybookSummary,
   type EdgeFingerprint,
 } from "@/lib/api";
@@ -26,6 +30,9 @@ export function AiRecommendations({ onTradeCreated }: AiRecommendationsProps) {
   const [edge, setEdge] = useState<EdgeFingerprint | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staged, setStaged] = useState<TradeIdea[]>([]);
+  const [stagedError, setStagedError] = useState<string | null>(null);
+  const [stagedLoading, setStagedLoading] = useState(true);
 
   const loadRecommendations = useCallback(async () => {
     setLoading(true);
@@ -45,11 +52,19 @@ export function AiRecommendations({ onTradeCreated }: AiRecommendationsProps) {
     }
   }, [selectedPlaybook]);
 
-  // Load playbooks + edge once on mount
+  const loadStaged = useCallback(async () => {
+    const result = await fetchTradesResult();
+    setStaged(result.trades);
+    setStagedError(result.error);
+    setStagedLoading(false);
+  }, []);
+
+  // Load playbooks + edge + staged ideas once on mount
   useEffect(() => {
     fetchPlaybooks().then(setPlaybooks);
     fetchEdge().then(setEdge);
-  }, []);
+    void loadStaged();
+  }, [loadStaged]);
 
   // Reload recommendations whenever the playbook changes
   useEffect(() => {
@@ -73,6 +88,7 @@ export function AiRecommendations({ onTradeCreated }: AiRecommendationsProps) {
 
       if (result) {
         alert(`Trade created for ${rec.symbol}! Review in Approvals.`);
+        void loadStaged();
         onTradeCreated?.();
       }
     } catch (err) {
@@ -99,13 +115,29 @@ export function AiRecommendations({ onTradeCreated }: AiRecommendationsProps) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={loadRecommendations}
+          onClick={() => {
+            void loadRecommendations();
+            void loadStaged();
+          }}
           disabled={loading}
           className="gap-2 w-full sm:w-auto"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
+      </div>
+
+      <div className="mb-6 min-w-0">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-3">
+          <p className="text-sm font-semibold text-foreground">Staged pipeline</p>
+          <Link
+            href="/app/recommendations"
+            className="text-sm text-primary underline-offset-4 hover:underline inline-flex items-center min-h-11"
+          >
+            All recommendations
+          </Link>
+        </div>
+        <PipelineIdeas trades={staged} error={stagedError} loading={stagedLoading} groupAs="h4" />
       </div>
 
       {/* Playbook selector */}
@@ -177,8 +209,8 @@ export function AiRecommendations({ onTradeCreated }: AiRecommendationsProps) {
       {!loading && recommendations.length === 0 && !error && (
         <div className="text-center py-12">
           <Sparkles className="w-8 h-8 text-muted-foreground mx-auto mb-3 opacity-50" />
-          <p className="text-sm text-muted-foreground">No high-confidence setups right now</p>
-          <p className="text-xs text-muted-foreground mt-1">Check back in a few minutes</p>
+          <p className="text-sm text-muted-foreground">No new advisor setups right now</p>
+          <p className="text-xs text-muted-foreground mt-1">Staged ideas above stay available after a refresh</p>
         </div>
       )}
 

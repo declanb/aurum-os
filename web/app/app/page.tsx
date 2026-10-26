@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchTrades, fetchRxAccount, fetchTickers, fetchOpenAIBalance, type TradeIdea, type RxAccount, type RxTicker, type OpenAIBalance } from "@/lib/api";
+import { fetchTradesResult, fetchRxAccount, fetchTickers, fetchOpenAIBalance, type TradeIdea, type RxAccount, type RxTicker, type OpenAIBalance } from "@/lib/api";
+import { PipelineIdeas } from "@/components/PipelineIdeas";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, AlertCircle, CheckCircle2, Clock, ArrowRight, RefreshCw, Sparkles, Bot, Activity } from "lucide-react";
+import { TrendingUp, AlertCircle, Clock, RefreshCw, Sparkles, Bot } from "lucide-react";
 import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
@@ -20,63 +20,74 @@ type AgentStatus = {
 export default function Dashboard() {
   const [account, setAccount] = useState<RxAccount | null>(null);
   const [trades, setTrades] = useState<TradeIdea[]>([]);
+  const [tradesError, setTradesError] = useState<string | null>(null);
   const [tickers, setTickers] = useState<RxTicker[]>([]);
   const [openaiBalance, setOpenaiBalance] = useState<OpenAIBalance | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tradesReady, setTradesReady] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
-    const load = async () => {
-      const [acc, trd, oai] = await Promise.all([
+    let cancelled = false;
+
+    const loadTrades = async () => {
+      const tradeResult = await fetchTradesResult();
+      if (cancelled) return;
+      setTrades(tradeResult.trades);
+      setTradesError(tradeResult.error);
+      setTradesReady(true);
+    };
+
+    const loadAccount = async () => {
+      const [acc, oai] = await Promise.all([
         fetchRxAccount(),
-        fetchTrades(),
         fetchOpenAIBalance(),
       ]);
+      if (cancelled) return;
       setAccount(acc);
-      setTrades(trd);
       setOpenaiBalance(oai);
 
-      // Fetch agent status
       try {
         const agentRes = await fetch(`${API_URL}/agent/status`);
-        if (agentRes.ok) {
+        if (!cancelled && agentRes.ok) {
           setAgentStatus(await agentRes.json());
         }
-      } catch (e) {
+      } catch {
         // Agent endpoint unavailable
       }
 
-      // Get USD prices for any non-fiat balances so we can show total portfolio value
       if (acc?.balances) {
         const cryptoCcys = acc.balances
           .filter((b) => b.balance > 0 && b.currency !== "EUR" && b.currency !== "USD" && b.currency !== "GBP")
           .map((b) => `${b.currency}-USD`);
         if (cryptoCcys.length > 0) {
           const tix = await fetchTickers(cryptoCcys);
-          setTickers(tix);
-        } else {
+          if (!cancelled) setTickers(tix);
+        } else if (!cancelled) {
           setTickers([]);
         }
       }
 
-      setLastUpdated(new Date());
-      setLoading(false);
+      if (!cancelled) {
+        setLastUpdated(new Date());
+        setLoading(false);
+      }
     };
-    load();
-    const i = setInterval(load, 15_000);
-    return () => clearInterval(i);
+
+    void loadTrades();
+    void loadAccount();
+    const i = setInterval(() => {
+      void loadTrades();
+      void loadAccount();
+    }, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(i);
+    };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[50vh]">
-        <p className="text-muted-foreground animate-pulse">Loading live data from Revolut X…</p>
-      </div>
-    );
-  }
-
-  const pendingApproval = trades.filter((t) => t.status === "Ready for Approval");
+  const pendingApproval = trades.filter((t) => t.status === "Ready for Approval" || t.status === "Needs Work");
   const approved = trades.filter((t) => t.status === "Approved");
   const executed = trades.filter((t) => t.status === "Sent");
   const rejected = trades.filter((t) => t.status === "Cancelled");
@@ -127,6 +138,27 @@ export default function Dashboard() {
         )}
       </div>
 
+      <section aria-labelledby="recommendations-heading" className="min-w-0">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between mb-3">
+          <div className="min-w-0">
+            <h2 id="recommendations-heading" className="text-lg font-semibold text-foreground">
+              Recommendations
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Staged ideas stay listed here after a refresh. Approve and execute on Approvals.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="gap-2 w-full sm:w-auto min-h-11" asChild>
+            <Link href="/app/recommendations">Full list</Link>
+          </Button>
+        </div>
+        <PipelineIdeas trades={trades} error={tradesError} loading={!tradesReady} groupAs="h3" />
+      </section>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading account…</p>
+      ) : (
+      <>
       {/* Account Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
@@ -261,79 +293,6 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* AI Recommendations */}
-      <Card>
-        <CardHeader className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between pb-2">
-          <CardTitle className="text-lg font-semibold text-foreground">
-            Helm Trade Ideas
-          </CardTitle>
-          <Button variant="outline" size="sm" className="gap-2 w-full sm:w-auto" asChild>
-            <Link href="/app/approvals">
-              Review All <ArrowRight className="w-3 h-3" />
-            </Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {pendingApproval.length === 0 ? (
-            <div className="py-8 text-center">
-              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground mb-1">No trade ideas pending right now.</p>
-              <p className="text-xs text-muted-foreground">
-                {trades.length === 0
-                  ? "Helm hasn't generated any recommendations yet."
-                  : `${trades.length} historical idea${trades.length === 1 ? "" : "s"} in your archive.`}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {pendingApproval.slice(0, 3).map((trade) => {
-                const isLong = trade.direction === "LONG";
-                return (
-                  <div
-                    key={trade.id}
-                    className="p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={isLong ? "default" : trade.direction === "EXIT" ? "outline" : "destructive"} className="font-mono text-[10px]">
-                          {trade.direction}
-                        </Badge>
-                        <span className="font-bold text-foreground">{trade.symbol}</span>
-                      </div>
-                      <Badge variant="outline" className="text-primary border-primary/20 bg-primary/10">
-                        {trade.status}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{trade.thesis}</p>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm">
-                      <div className="grid grid-cols-3 gap-2 text-muted-foreground min-w-0">
-                        <span className="min-w-0">
-                          Entry
-                          <span className="block font-mono text-foreground break-all">{trade.entry_price}</span>
-                        </span>
-                        <span className="min-w-0">
-                          SL
-                          <span className="block font-mono text-foreground break-all">{trade.stop_price}</span>
-                        </span>
-                        <span className="min-w-0">
-                          TP
-                          <span className="block font-mono text-foreground break-all">{trade.target_price}</span>
-                        </span>
-                      </div>
-                      <Button variant="ghost" size="sm" className="w-full sm:w-auto gap-1" asChild>
-                        <Link href="/app/approvals">
-                          Review <ArrowRight className="w-3 h-3" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Recent Activity Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -387,6 +346,8 @@ export default function Dashboard() {
           </Link>
         </Button>
       </div>
+      </>
+      )}
     </div>
   );
 }

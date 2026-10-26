@@ -1,44 +1,77 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { GlassCard } from "@/components/GlassCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, CheckCircle2, ArrowRight, ShieldCheck, RefreshCw } from "lucide-react";
 import { fetchTrades, processApproval, fetchApprovalEvents, executeTrade, TradeIdea } from "@/lib/api";
+import { pipelineIdeas } from "@/lib/pipeline";
 import { IdeaWhy } from "@/components/IdeaWhy";
 
-export default function ApprovalsDashboard() {
+type ApprovalEventView = {
+    action?: string;
+    reasoning?: string;
+    timestamp?: string;
+};
+
+function ApprovalsDashboard() {
+    const searchParams = useSearchParams();
+    const pathname = usePathname();
+    const router = useRouter();
+    const ideaParam = searchParams.get("idea");
     const [pendingTrades, setPendingTrades] = useState<TradeIdea[]>([]);
+    const [omittedSent, setOmittedSent] = useState(0);
     const [activeTrade, setActiveTrade] = useState<TradeIdea | null>(null);
-    const [events, setEvents] = useState<any[]>([]);
+    const [events, setEvents] = useState<ApprovalEventView[]>([]);
     const [reasoning, setReasoning] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
 
-    useEffect(() => {
-        loadPending();
-    }, []);
-
-    const loadPending = async () => {
+    const loadPending = useCallback(async () => {
         const data = await fetchTrades();
-        const needsApproval = data.filter(t => t.status === "Ready for Approval" || t.status === "Needs Work" || t.status === "Approved" || t.status === "Sent");
-        setPendingTrades(needsApproval);
+        const queue = pipelineIdeas(data);
+        const sentTotal = data.filter((trade) => trade.status === "Sent").length;
+        const sentShown = queue.filter((trade) => trade.status === "Sent").length;
+        setOmittedSent(Math.max(0, sentTotal - sentShown));
+        setPendingTrades(queue);
+        setActiveTrade((prev) => {
+            const requested = ideaParam ? Number(ideaParam) : NaN;
+            const prefer = prev?.id ?? (Number.isFinite(requested) ? requested : undefined);
+            if (prefer != null) {
+                const match = queue.find((trade) => trade.id === prefer);
+                if (match) return match;
+            }
+            return queue[0] ?? null;
+        });
+    }, [ideaParam]);
 
-        if (needsApproval.length > 0 && !activeTrade) {
-            setActiveTrade(needsApproval[0]);
-            loadEvents(needsApproval[0].id);
-        }
-    };
+    useEffect(() => {
+        void loadPending();
+    }, [loadPending]);
 
-    const loadEvents = async (id: number) => {
-        const eventData = await fetchApprovalEvents(id);
-        setEvents(eventData);
-    }
+    const activeId = activeTrade?.id;
+    const activeStatus = activeTrade?.status;
+    const activeUpdated = activeTrade?.updated_at;
+
+    useEffect(() => {
+        if (activeId == null) return;
+        let cancelled = false;
+        setEvents([]);
+        fetchApprovalEvents(activeId).then((eventData) => {
+            if (!cancelled) setEvents(eventData);
+        });
+        document.getElementById(`approval-idea-${activeId}`)?.scrollIntoView({ inline: "nearest", block: "nearest" });
+        return () => {
+            cancelled = true;
+        };
+    }, [activeId, activeStatus, activeUpdated]);
 
     const handleSelectTrade = (trade: TradeIdea) => {
         setActiveTrade(trade);
-        loadEvents(trade.id);
         setReasoning("");
+        router.replace(`${pathname}?idea=${trade.id}`, { scroll: false });
     }
 
     const handleAction = async (action: "APPROVE" | "REJECT") => {
@@ -48,13 +81,6 @@ export default function ApprovalsDashboard() {
             await processApproval(activeTrade.id, action, reasoning);
             setReasoning("");
             await loadPending();
-
-            const updated = await fetchTrades();
-            const freshActive = updated.find(t => t.id === activeTrade.id);
-            if (freshActive) {
-                setActiveTrade(freshActive);
-                await loadEvents(freshActive.id);
-            }
         } catch (error) {
             console.error("Approval action failed:", error);
         } finally {
@@ -70,20 +96,14 @@ export default function ApprovalsDashboard() {
             // Exit ideas sell the bracket quantity. A quote-EUR amount would buy more.
             const result = await executeTrade(activeTrade.id, isExit ? {} : { quoteEur: 2.0 });
             if (result && (result.ticket_status === "Filled" || result.trade_status === "Sent")) {
-                // Success
                 await loadPending();
-                const updated = await fetchTrades();
-                const freshActive = updated.find(t => t.id === activeTrade.id);
-                if (freshActive) {
-                    setActiveTrade(freshActive);
-                    await loadEvents(freshActive.id);
-                }
             } else {
                 alert(`Execution rejected by broker:\n\n${result?.execution?.message || result?.message || "Unknown error"}`);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Execution failed:", error);
-            alert(`Execution failed:\n\n${error?.message || String(error)}\n\nCheck backend logs for full traceback.`);
+            const message = error instanceof Error ? error.message : String(error);
+            alert(`Execution failed:\n\n${message}\n\nCheck backend logs for full traceback.`);
         } finally {
             setIsProcessing(false);
         }
@@ -108,6 +128,7 @@ export default function ApprovalsDashboard() {
                             type="button"
                             onClick={() => handleSelectTrade(trade)}
                             aria-pressed={activeTrade?.id === trade.id}
+                            id={`approval-idea-${trade.id}`}
                             className={`snap-start shrink-0 w-[min(16rem,78vw)] lg:w-full lg:shrink text-left p-3 min-h-16 rounded-lg border transition-all ${activeTrade?.id === trade.id ? 'bg-accent border-primary/50' : 'bg-card border-border hover:bg-accent/50'}`}
                         >
                             <div className="flex justify-between items-start mb-2">
@@ -130,6 +151,12 @@ export default function ApprovalsDashboard() {
                     ))}
                     {pendingTrades.length === 0 && (
                         <div className="p-6 w-full text-center text-sm text-muted-foreground">No trades pending authorization.</div>
+                    )}
+                    {omittedSent > 0 && (
+                        <p className="p-3 text-xs text-muted-foreground leading-relaxed">
+                            {omittedSent} older sent idea{omittedSent === 1 ? "" : "s"} {omittedSent === 1 ? "is" : "are"} in the{" "}
+                            <Link href="/app/journal" className="text-primary underline-offset-4 hover:underline">Journal</Link>.
+                        </p>
                     )}
                 </div>
             </GlassCard>
@@ -236,7 +263,34 @@ export default function ApprovalsDashboard() {
                             <GlassCard className="p-4 sm:p-5 flex flex-col">
                                 <h3 className="font-bold text-foreground mb-4">Authorization</h3>
 
-                                {activeTrade.status !== "Approved" ? (
+                                {activeTrade.status === "Sent" ? (
+                                    <div className="text-center p-4 sm:p-6 bg-muted rounded-lg border border-border">
+                                        <ShieldCheck className="w-8 h-8 text-sky-500 mx-auto mb-3" />
+                                        <p className="text-foreground/80 font-medium">Already sent to Revolut X</p>
+                                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                            This idea stays on the list so you can read it. Execute is not offered again from here.
+                                        </p>
+                                    </div>
+                                ) : activeTrade.status === "Approved" ? (
+                                    <div className="text-center p-4 sm:p-6 bg-muted rounded-lg border border-border">
+                                        <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-3" />
+                                        <p className="text-foreground/80 font-medium">Trade Locked & Authorized</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Further parameter modifications will reset state.</p>
+
+                                        <Button
+                                            className="w-full mt-6 min-h-12 whitespace-normal text-center text-base bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20"
+                                            onClick={() => handleExecute()}
+                                            disabled={isProcessing}
+                                        >
+                                            {isProcessing ? (
+                                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                            ) : (
+                                                <ArrowRight className="w-4 h-4 mr-2" />
+                                            )}
+                                            {activeTrade.direction === "EXIT" ? "Sell spot long at market" : "Execute"}
+                                        </Button>
+                                    </div>
+                                ) : (
                                     <>
                                         <textarea
                                             value={reasoning}
@@ -262,25 +316,6 @@ export default function ApprovalsDashboard() {
                                             </Button>
                                         </div>
                                     </>
-                                ) : (
-                                    <div className="text-center p-4 sm:p-6 bg-muted rounded-lg border border-border">
-                                        <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-3" />
-                                        <p className="text-foreground/80 font-medium">Trade Locked & Authorized</p>
-                                        <p className="text-xs text-muted-foreground mt-1">Further parameter modifications will reset state.</p>
-
-                                        <Button
-                                            className="w-full mt-6 min-h-12 whitespace-normal text-center text-base bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/20"
-                                            onClick={() => handleExecute()}
-                                            disabled={isProcessing}
-                                        >
-                                            {isProcessing ? (
-                                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                            ) : (
-                                                <ArrowRight className="w-4 h-4 mr-2" />
-                                            )}
-                                            {activeTrade.direction === "EXIT" ? "Sell spot long at market" : "Execute"}
-                                        </Button>
-                                    </div>
                                 )}
                             </GlassCard>
 
@@ -299,7 +334,7 @@ export default function ApprovalsDashboard() {
                                                     <span className="font-semibold text-foreground/90">
                                                         {ev.action === 'APPROVE' ? 'Authorized' : 'Rejected'}
                                                     </span>
-                                                    <span className="text-xs text-muted-foreground">{new Date(ev.timestamp).toLocaleTimeString()}</span>
+                                                    <span className="text-xs text-muted-foreground">{ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : ""}</span>
                                                 </div>
                                                 {ev.reasoning && (
                                                     <p className="text-muted-foreground text-xs italic border-l-2 border-border pl-2">&quot;{ev.reasoning}&quot;</p>
@@ -323,5 +358,13 @@ export default function ApprovalsDashboard() {
             )}
 
         </div>
+    );
+}
+
+export default function ApprovalsPage() {
+    return (
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading approvals…</p>}>
+            <ApprovalsDashboard />
+        </Suspense>
     );
 }
