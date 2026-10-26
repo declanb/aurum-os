@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     # OpenAI's Responses API and does NOT use the GitHub Models fallback.
     AURUM_USE_AGENTS_SDK: bool = False
 
+    # ── trend_scout (read-only SignalBundles; never places orders) ───────────
+    # Off by default. When on, ai_advisor may attach untrusted public-trend context.
+    # AURUM_TREND_SCOUT_NETWORK=1 fetches the allowlisted RSS feeds. X/Twitter is
+    # queried only when X_BEARER_TOKEN is also set. See docs/HELM_AGENT_FLEET.md.
+    AURUM_TREND_SCOUT: bool = False
+    AURUM_TREND_SCOUT_NETWORK: bool = False
+    X_BEARER_TOKEN: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
