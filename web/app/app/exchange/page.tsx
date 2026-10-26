@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { MarketList } from "@/components/MarketList";
 import { OrderBook } from "@/components/OrderBook";
 import { TradePanel } from "@/components/TradePanel";
@@ -26,7 +26,7 @@ export default function ExchangePage() {
   const [balance, setBalance] = useState<number>(0);
   const [balanceCcy, setBalanceCcy] = useState<string>("EUR");
   const [refreshKey, setRefreshKey] = useState(0);
-  const sessionHighRef = useRef<Record<string, { high: number; low: number; open: number }>>({});
+  const [sessionStats, setSessionStats] = useState<Record<string, { high: number; low: number; open: number }>>({});
 
   // Poll tickers from Revolut X every 2s
   useEffect(() => {
@@ -35,14 +35,19 @@ export default function ExchangePage() {
       const data = await fetchTickers(WATCHLIST);
       if (cancelled) return;
       // Track session OHLC for each symbol
-      data.forEach((t) => {
-        const cur = sessionHighRef.current[t.symbol];
-        if (!cur) {
-          sessionHighRef.current[t.symbol] = { high: t.mid, low: t.mid, open: t.mid };
-        } else {
-          cur.high = Math.max(cur.high, t.mid);
-          cur.low = Math.min(cur.low, t.mid);
-        }
+      setSessionStats((current) => {
+        const next = { ...current };
+        data.forEach((ticker) => {
+          const previous = current[ticker.symbol];
+          next[ticker.symbol] = previous
+            ? {
+                ...previous,
+                high: Math.max(previous.high, ticker.mid),
+                low: Math.min(previous.low, ticker.mid),
+              }
+            : { high: ticker.mid, low: ticker.mid, open: ticker.mid };
+        });
+        return next;
       });
       setTickers(data);
     };
@@ -72,11 +77,10 @@ export default function ExchangePage() {
 
   const selected = tickers.find((t) => t.symbol === selectedSymbol);
   const midPrice = selected?.mid ?? 0;
-  const session = sessionHighRef.current[selectedSymbol];
-  const change = useMemo(() => {
-    if (!selected || !session) return 0;
-    return ((selected.mid - session.open) / session.open) * 100;
-  }, [selected, session]);
+  const session = sessionStats[selectedSymbol];
+  const change = selected && session
+    ? ((selected.mid - session.open) / session.open) * 100
+    : 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-background -m-6 lg:-m-8">
@@ -95,7 +99,7 @@ export default function ExchangePage() {
       </div>
 
       <div className="flex-1 grid grid-cols-[220px_240px_1fr_320px] min-h-0">
-        <MarketList selectedSymbol={selectedSymbol} onSelect={setSelectedSymbol} tickers={tickers} />
+        <MarketList selectedSymbol={selectedSymbol} onSelect={setSelectedSymbol} tickers={tickers} sessionStats={sessionStats} />
         <OrderBook symbol={selectedSymbol} midPrice={midPrice || 1} />
         <div className="flex flex-col min-w-0 border-r border-border">
           <div className="flex-1 min-h-0">

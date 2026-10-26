@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bot, Play, Pause, RefreshCw, AlertTriangle, CheckCircle, XCircle, Activity, TrendingUp } from "lucide-react";
+import { Bot, Play, Pause, RefreshCw, AlertTriangle, CheckCircle, Activity, TrendingUp } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -14,7 +14,14 @@ type Agent = {
   status: string;
   last_heartbeat: string;
   pid: number;
-  metadata: any;
+  metadata: {
+    playbook?: string;
+    poll_minutes?: number;
+    symbols?: string[];
+    qty?: number;
+    cost_eur?: number;
+    min_profit_eur?: number;
+  };
 };
 
 type AgentRegistry = {
@@ -48,7 +55,7 @@ export default function AgentsPage() {
       ]);
 
       const agentsData: AgentRegistry = agentsRes.ok ? await agentsRes.json() : {};
-      const statusData = statusRes.ok ? await statusRes.json() : null;
+      const statusData: AgentStatus | null = statusRes.ok ? await statusRes.json() : null;
 
       setAgents(agentsData);
       setStatus(statusData);
@@ -60,7 +67,7 @@ export default function AgentsPage() {
       if (profitHunterAgents.length > 0) {
         const logsRes = await fetch(`${API_URL}/agent/profit-hunter/logs`);
         if (logsRes.ok) {
-          const logsData = await logsRes.json();
+          const logsData: { logs?: string[] } = await logsRes.json();
           setLogs(logsData.logs || []);
         }
       }

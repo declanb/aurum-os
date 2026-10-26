@@ -4,18 +4,33 @@ import { useState, useEffect } from "react";
 import { GlassCard } from "@/components/GlassCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, CheckCircle2, XCircle, ArrowRight, ShieldCheck, RefreshCw } from "lucide-react";
-import { fetchTrades, processApproval, fetchApprovalEvents, executeTrade, TradeIdea } from "@/lib/api";
+import { ShieldAlert, CheckCircle2, ArrowRight, ShieldCheck, RefreshCw } from "lucide-react";
+import { fetchTrades, processApproval, fetchApprovalEvents, executeTrade, TradeIdea, ApprovalEvent } from "@/lib/api";
 
 export default function ApprovalsDashboard() {
     const [pendingTrades, setPendingTrades] = useState<TradeIdea[]>([]);
     const [activeTrade, setActiveTrade] = useState<TradeIdea | null>(null);
-    const [events, setEvents] = useState<any[]>([]);
+    const [events, setEvents] = useState<ApprovalEvent[]>([]);
     const [reasoning, setReasoning] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
-        loadPending();
+        let cancelled = false;
+        const loadInitialTrades = async () => {
+            const data = await fetchTrades();
+            const needsApproval = data.filter(t => ["Ready for Approval", "Needs Work", "Approved", "Sent"].includes(t.status));
+            if (cancelled) return;
+            setPendingTrades(needsApproval);
+
+            if (needsApproval.length > 0) {
+                const initialTrade = needsApproval[0];
+                setActiveTrade(current => current ?? initialTrade);
+                const initialEvents = await fetchApprovalEvents(initialTrade.id);
+                if (!cancelled) setEvents(initialEvents);
+            }
+        };
+        void loadInitialTrades();
+        return () => { cancelled = true; };
     }, []);
 
     const loadPending = async () => {
@@ -78,9 +93,10 @@ export default function ApprovalsDashboard() {
             } else {
                 alert(`Execution rejected by broker:\n\n${result?.execution?.message || result?.message || "Unknown error"}`);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Execution failed:", error);
-            alert(`Execution failed:\n\n${error?.message || String(error)}\n\nCheck backend logs for full traceback.`);
+            const message = error instanceof Error ? error.message : String(error);
+            alert(`Execution failed:\n\n${message}\n\nCheck backend logs for full traceback.`);
         } finally {
             setIsProcessing(false);
         }
@@ -285,19 +301,14 @@ export default function ApprovalsDashboard() {
                                     {events.map((ev, i) => (
                                         <div key={i} className="flex gap-3 text-sm">
                                             <div className="flex flex-col items-center mt-1">
-                                                <div className={`w-2 h-2 rounded-full ${ev.action === 'APPROVE' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                                <div className="w-2 h-2 rounded-full bg-emerald-500" />
                                                 {i !== events.length - 1 && <div className="w-px h-full bg-border my-1" />}
                                             </div>
                                             <div className="pb-4">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <span className="font-semibold text-foreground/90">
-                                                        {ev.action === 'APPROVE' ? 'Authorized' : 'Rejected'}
-                                                    </span>
+                                                    <span className="font-semibold text-foreground/90">Authorized</span>
                                                     <span className="text-xs text-muted-foreground">{new Date(ev.timestamp).toLocaleTimeString()}</span>
                                                 </div>
-                                                {ev.reasoning && (
-                                                    <p className="text-muted-foreground text-xs italic border-l-2 border-border pl-2">&quot;{ev.reasoning}&quot;</p>
-                                                )}
                                             </div>
                                         </div>
                                     ))}
