@@ -2,7 +2,8 @@
 Market data service \u2014 wraps the Revolut X client to expose normalised
 price, candle, account-info, and pair-spec dicts to the rest of Aurum OS.
 
-The underlying transport is the `revx` CLI invoked by revolut_x_client.
+The underlying transport is revolut_x_client: signed HTTP when env keys
+are set, otherwise the `revx` CLI.
 """
 
 from __future__ import annotations
@@ -108,10 +109,7 @@ async def get_orderbook(symbol: str = "BTC-USD", limit: int = 20) -> dict:
 
 async def get_tickers(symbols: Optional[list[str]] = None) -> list[dict]:
     """Multi-pair tickers for the market list."""
-    if symbols:
-        raw = await rx._run("market", "tickers", "--symbols", ",".join(symbols))
-    else:
-        raw = await rx._run("market", "tickers")
+    raw = await rx.list_tickers(symbols)
     rows = raw if isinstance(raw, list) else []
     out = []
     for r in rows:

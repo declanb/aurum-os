@@ -1,8 +1,8 @@
 """
 Revolut X broker endpoints \u2014 account, market data, orders, and trade execution.
 
-All write paths go through Guardian + ApprovalEvent. The underlying transport
-is the `revx` CLI invoked by api.services.revolut_x_client.
+All write paths go through Guardian + ApprovalEvent. Transport is the signed
+Revolut X HTTP API when env keys are set, otherwise the `revx` CLI.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -33,7 +33,7 @@ class ExecuteRequest(BaseModel):
 
 @router.get("/status")
 async def broker_status():
-    """Check if `revx` CLI auth is healthy by hitting a benign read endpoint."""
+    """Check Revolut X auth by reading balances (HTTP API or the revx CLI)."""
     return await get_status()
 
 
