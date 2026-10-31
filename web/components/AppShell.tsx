@@ -16,6 +16,7 @@ import {
     MoreHorizontal,
     ListChecks,
     Library,
+    Gem,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BalancePill } from "@/components/BalancePill";
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
     { href: "/app/guru", icon: MessageCircle, label: "Guru" },
     { href: "/app/recommendations", icon: ListChecks, label: "Recommendations" },
     { href: "/app/copy", icon: Library, label: "Copy book" },
+    { href: "/app/commodities", icon: Gem, label: "Commodities" },
     { href: "/app/approvals", icon: ShieldAlert, label: "Approvals" },
     { href: "/app/planner", icon: FileText, label: "Planner" },
     { href: "/app/journal", icon: BookOpen, label: "Journal" },

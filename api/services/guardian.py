@@ -33,6 +33,8 @@ class GuardianService:
         if not trade.invalidation_notes:
             issues.append("Missing invalidation notes. What proves you wrong?")
 
+        warnings = _venue_warnings(trade)
+
         if not issues:
             result = {
                 "passed": True,
@@ -48,8 +50,25 @@ class GuardianService:
                 "issues": issues,
                 "feedback": "Refine your risk parameters or thesis detail before submitting for approval."
             }
+        if warnings:
+            result["warnings"] = warnings
         _note_challenge(trade, result)
         return result
+
+def _venue_warnings(trade: TradeIdea) -> list:
+    """Non-blocking venue notes. Revolut X spot symbols (BTC-EUR) get none."""
+    symbol = (getattr(trade, "symbol", None) or "").upper()
+    if not symbol or "-" in symbol:
+        return []
+    try:
+        from api.services.metaapi_venue import CFD_WARNING, allowed_symbols
+
+        if symbol in allowed_symbols():
+            return [CFD_WARNING]
+    except Exception:  # noqa: BLE001
+        return []
+    return []
+
 
 def _note_challenge(trade: TradeIdea, result: Dict[str, Any]) -> None:
     """Stamp the fleet board. A registry failure must not change the verdict."""

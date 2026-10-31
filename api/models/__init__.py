@@ -13,6 +13,7 @@ from .journal import JournalEntry
 from .note import MarketNote
 from .checklist import TradeChecklist
 from .copy_book import CopySession, CopyPosition
+from .metaapi import MetaApiIdea, MetaApiPaperPosition
 
 __all__ = [
     "SQLModel",
@@ -27,4 +28,6 @@ __all__ = [
     "TradeChecklist",
     "CopySession",
     "CopyPosition",
+    "MetaApiIdea",
+    "MetaApiPaperPosition",
 ]
