@@ -42,6 +42,18 @@ class Settings(BaseSettings):
     HELM_COPY_MAX_POSITIONS: int = 5
     HELM_COPY_GAINER_LIMIT: int = 3
 
+    # ── Helm strategy (approved Oct 2026 after the overnight paper test) ──
+    # Symmetric exit brackets replace "sell on any green". Percents are net of
+    # the Revolut X sell taker fee: +3% / -3% of the entry notional after fees.
+    HELM_TP_PCT: float = 3.0
+    HELM_SL_PCT: float = 3.0
+    HELM_SYMMETRIC_BRACKETS: bool = True     # apply TP/SL to new scout LONG ideas
+    HELM_MAX_IDEAS_PER_DAY: int = 2          # scout conviction cap per UTC day
+    HELM_STALE_IDEA_HOURS: float = 48.0      # expire-stale cutoff (never auto-run)
+    # Strategy paper week: EUR 200 virtual bank, EUR 50 per position.
+    HELM_PAPER_POSITION_EUR: float = 50.0
+    HELM_COPY_PUBLIC_QUOTES: bool = False    # mark via REVX public tickers (no keys)
+
     # ── Auto-approve (Trade Advisor → Approved TradeIdea, NO order placement) ────
     # Off by default. Flip AURUM_AUTO_APPROVE=1 in .env to enable.
     # When enabled, high-confidence recommendations are auto-created as TradeIdeas

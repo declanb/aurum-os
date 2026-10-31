@@ -203,6 +203,24 @@ def _snapshot_hash(trade: TradeIdea) -> str:
     return hashlib.sha256(json.dumps(snapshot, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def default_levels(trade: TradeIdea, fill_price: float) -> tuple[Optional[float], Optional[float]]:
+    """Stop and target for a new bracket.
+
+    Helm's symmetric rule (HELM_TP_PCT / HELM_SL_PCT, net of fees) is the
+    default for new REVX ideas: scout ideas, and any LONG idea missing a level,
+    get +TP / -SL rebased on the actual fill. Other ideas keep their own levels.
+    """
+    from api.services import helm_strategy
+
+    stop = trade.stop_price
+    target = trade.target_price
+    missing = not stop or stop <= 0 or not target or target <= 0
+    scout = (trade.thesis or "").startswith(helm_strategy.SCOUT_TAG)
+    if settings.HELM_SYMMETRIC_BRACKETS and fill_price > 0 and (missing or scout):
+        return helm_strategy.bracket_levels(fill_price)
+    return stop, target
+
+
 def arm_bracket(session: Session, ticket: ExecutionTicket, trade: TradeIdea) -> Optional[ExitBracket]:
     """Arm a bracket for a filled spot LONG. Returns the existing row if present.
 
@@ -217,9 +235,10 @@ def arm_bracket(session: Session, ticket: ExecutionTicket, trade: TradeIdea) -> 
         return None
     if not ticket.fill_price or ticket.fill_price <= 0:
         return None
-    if not trade.stop_price or trade.stop_price <= 0 or not trade.target_price or trade.target_price <= 0:
-        return None
     if trade.status in {"Closed", "Cancelled"}:
+        return None
+    stop_level, target_level = default_levels(trade, float(ticket.fill_price))
+    if not stop_level or stop_level <= 0 or not target_level or target_level <= 0:
         return None
 
     existing = session.exec(
@@ -236,9 +255,9 @@ def arm_bracket(session: Session, ticket: ExecutionTicket, trade: TradeIdea) -> 
         direction="LONG",
         qty=float(ticket.fill_qty),
         entry_price=float(ticket.fill_price),
-        initial_stop_price=float(trade.stop_price),
-        stop_price=float(trade.stop_price),
-        target_price=float(trade.target_price),
+        initial_stop_price=float(stop_level),
+        stop_price=float(stop_level),
+        target_price=float(target_level),
         high_water_price=float(ticket.fill_price),
         trail_armed=False,
         status="armed",

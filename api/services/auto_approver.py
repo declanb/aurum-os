@@ -24,6 +24,7 @@ from sqlmodel import Session, select
 
 from api.core.config import settings
 from api.models.trade import TradeIdea, TradeIdeaVersion
+from api.services import helm_strategy
 from api.services.guardian import guardian_service
 
 logger = logging.getLogger(__name__)
@@ -220,6 +221,20 @@ def stage_recommendation(
         if abs(existing.entry_price - entry) / max(entry, 1e-9) < 0.005:  # within 0.5%
             return False, f"duplicate of trade #{existing.id}", existing.id
 
+    # Conviction cap: at most HELM_MAX_IDEAS_PER_DAY scout ideas per UTC day.
+    # Callers rank recs by confidence_score first, so the cap keeps the top N.
+    cap = helm_strategy.max_ideas_per_day()
+    if helm_strategy.scout_staged_today(session) >= cap:
+        return False, f"daily cap reached ({cap} ideas per day)", None
+
+    stop_price = rec["stop_price"]
+    target_price = rec["target_price"]
+    min_rr = 1.5
+    if direction == "LONG" and settings.HELM_SYMMETRIC_BRACKETS:
+        # Symmetric +TP / -SL net of fees replaces the advisor's levels.
+        stop_price, target_price = helm_strategy.bracket_levels(float(entry))
+        min_rr = helm_strategy.SYMMETRIC_MIN_RR
+
     playbook = rec.get("playbook_used") or {}
     thesis = (
         f"[SCOUT] {rec.get('thesis', '')[:140]} · "
@@ -233,14 +248,14 @@ def stage_recommendation(
         symbol=symbol,
         direction=direction,
         entry_price=entry,
-        stop_price=rec["stop_price"],
-        target_price=rec["target_price"],
+        stop_price=stop_price,
+        target_price=target_price,
         thesis=thesis,
         invalidation_notes=rec.get("invalidation") or "Scout: invalidate on stop trigger",
         status="Draft",
     )
 
-    check = guardian_service.challenge_trade(trade)
+    check = guardian_service.challenge_trade(trade, min_rr=min_rr)
     if not check.get("passed"):
         return False, f"Guardian blocked: {', '.join(check.get('issues', []))}", None
 

@@ -32,7 +32,12 @@ class StartBody(BaseModel):
     position_pct: Optional[float] = None
     max_notional_eur: Optional[float] = None
     max_positions: Optional[int] = None
-    any_green: bool = True
+    any_green: Optional[bool] = None
+    strategy: Optional[str] = None  # symmetric unless any_green=true
+    tp_pct: Optional[float] = None
+    sl_pct: Optional[float] = None
+    max_new_per_day: Optional[int] = None
+    position_eur: Optional[float] = None
     sources: Optional[list[str] | str] = None
     gainer_limit: Optional[int] = None
     lookback_hours: float = 24.0
@@ -63,7 +68,10 @@ def _http_error(exc: CopyBookError) -> HTTPException:
 
 @router.get("/status")
 def copy_status(session_id: Optional[int] = None, db: Session = Depends(get_session)):
-    """Running session, else the latest one. Always says live orders are off."""
+    """Running session, else the latest one. Always says live orders are off.
+
+    ``summary`` carries realised, open, win rate, avg win/loss, and fees.
+    """
     return snapshot(db, resolve_session(db, session_id))
 
 
@@ -74,7 +82,9 @@ def copy_session(session_id: Optional[int] = None, db: Session = Depends(get_ses
 
 @router.post("/session")
 def open_copy_session(body: Optional[StartBody] = None, db: Session = Depends(get_session)):
-    """Start a dry-run. An empty body uses HELM_COPY_BANKROLL_EUR (default 200)."""
+    """Start a dry-run. An empty body starts Helm's symmetric strategy:
+    EUR 200 bank (HELM_COPY_BANKROLL_EUR), EUR 50 per position, scout's top
+    ideas, +3% / -3% net brackets, at most 2 new positions a day."""
     payload = body or StartBody()
     try:
         book = start_session(
@@ -87,6 +97,11 @@ def open_copy_session(body: Optional[StartBody] = None, db: Session = Depends(ge
             sources=payload.sources,
             gainer_limit=payload.gainer_limit,
             lookback_hours=payload.lookback_hours,
+            strategy=payload.strategy,
+            tp_pct=payload.tp_pct,
+            sl_pct=payload.sl_pct,
+            max_new_per_day=payload.max_new_per_day,
+            position_eur=payload.position_eur,
             dry_run=payload.dry_run,
         )
     except CopyBookError as exc:

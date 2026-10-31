@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Helm symmetric brackets: scout longs get +3% / −3% net of fees (`HELM_TP_PCT`, `HELM_SL_PCT`). Any-green is off by default. Buys still need Approve and Execute.
+- Helm conviction cap: at most `HELM_MAX_IDEAS_PER_DAY` (2) scout ideas staged per day, best score first. `POST /api/strategy/expire-stale` and `python -m api.services.helm_strategy expire-stale` cancel unapproved ideas older than 48h (preview by default).
+- Helm paper week: the copy book defaults to the symmetric strategy, with €200, €50 a position, and 2 new names a day. It can mark from Revolut X public tickers, and `/api/copy/status` adds a summary (win rate, average win and loss, fees). See `docs/helm-strategy.md`.
 - Helm profit notifications: one in-app ping when a live spot long first turns green, again when a take-profit EXIT idea is waiting, and again when a profitable exit fills. Deduped per position. Shown in the phone shell (badge and banner). `GET /api/notifications/events?since_id=` is the read-only cursor for a room bot. No broker sell is sent from a ping. See `docs/helm-exit-brackets.md`.
 - Helm exit brackets: hard stop, take-profit, and a 1R / 0.25R trailing ratchet for filled spot longs. Revolut X still has no native SL/TP. Live triggers become an `EXIT` idea that needs approval before a market sell. `PAPER_TRADING=1` simulates that sell. See `docs/helm-exit-brackets.md`.
 

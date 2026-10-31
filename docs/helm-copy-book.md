@@ -13,7 +13,14 @@ It never places, cancels, or modifies a live order. It does not write an `Approv
 
 Ticker payloads may say `UNI/EUR`. The book stores `UNI-EUR`, the same form as the rest of Helm.
 
-## Sizing and exits
+## Strategies
+
+* **symmetric** (default): €50 per position (`HELM_PAPER_POSITION_EUR`), the top `HELM_MAX_IDEAS_PER_DAY` (2) new names per UTC day ranked by scout score, and a +3% / −3% bracket net of fees. No any-green and no ratchet. See `docs/helm-strategy.md`.
+* **any_green** (legacy): the rules below. Pass `--strategy any_green` or `any_green=true`.
+
+Marks come from the authenticated ticker, or from the Revolut X public tickers with `--public-quotes` / `HELM_COPY_PUBLIC_QUOTES=1`. `status --summary` and `GET /api/copy/status` include a `summary` block.
+
+## Sizing and exits (legacy any_green)
 
 Default bankroll is **€200** (`HELM_COPY_BANKROLL_EUR`, alias `AURUM_COPY_BANKROLL_EUR`).
 
@@ -24,7 +31,7 @@ The paper buy prints at mid, or at the bid/ask average, or at last. The mark for
 Exits, in order:
 
 1. Stop, target, and the trailing ratchet when both stop and target were stored. Same bid checks as `evaluate_long_bracket`. Paper only: no EXIT idea and no live bracket row.
-2. Any-green, when the session has it on (the default): close once sell-side P&L is above zero.
+2. Any-green, when the session has it on: close once sell-side P&L is above zero.
 3. A manual paper close, or flattening when the session stops.
 
 A fill is not eligible to exit on the same tick that opened it. The next poll marks it.

@@ -67,3 +67,8 @@ Where it runs:
 - `GET /api/cron/hunt` records pings on the existing Hobby cron (once a day). A paused fleet still records pings and still does not propose exits. `AURUM_AGENTS_ENABLED=false` skips the tick.
 - The open Helm app calls `POST /api/notifications/scan` about once a minute, and My Trade's live positions read records the same events, so a green flip shows up on the phone without waiting for the daily cron.
 - `GET /api/notifications` and `GET /api/notifications/events` are read-only. Pass `since_id` (last seen id, or 0) for a room bot; those results are oldest-first. Omit it for the newest-first list the app uses.
+
+
+## Symmetric default for scout ideas
+
+Scout longs are staged with +`HELM_TP_PCT` / −`HELM_SL_PCT` (3% / 3%) net of the sell fee, and the bracket is rebased on the fill price when armed. Ideas with their own levels keep them. See `docs/helm-strategy.md`.
