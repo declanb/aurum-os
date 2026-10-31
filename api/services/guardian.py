@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 class GuardianService:
     @staticmethod
-    def challenge_trade(trade: TradeIdea) -> Dict[str, Any]:
+    def challenge_trade(trade: TradeIdea, min_rr: float = 1.5) -> Dict[str, Any]:
         """
         Validates a trade idea against risk and structural rules.
         In a real app, this might call an LLM.
@@ -20,8 +20,9 @@ class GuardianService:
             reward = abs(trade.target_price - trade.entry_price)
             if risk > 0:
                 rr = reward / risk
-                if rr < 1.5:
-                    issues.append(f"Risk/Reward ratio is too low ({rr:.2f}). Minimum 1.5 required.")
+                # Helm's symmetric +3%/-3% bracket stages with min_rr=1.0.
+                if rr + 1e-9 < min_rr:
+                    issues.append(f"Risk/Reward ratio is too low ({rr:.2f}). Minimum {min_rr:g} required.")
             else:
                 issues.append("Invalid price levels: Entry and Stop are identical.")
         

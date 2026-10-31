@@ -135,7 +135,9 @@ def test_dry_run_cannot_be_turned_off():
 def test_paper_open_flat_mark_then_any_green_close():
     db = _session()
     idea = _idea(db)
-    book = start_session(db, bankroll_eur=200, position_pct=0.10, max_notional_eur=40, sources=["trade_ideas"])
+    book = start_session(
+        db, bankroll_eur=200, position_pct=0.10, max_notional_eur=40, sources=["trade_ideas"], strategy="any_green"
+    )
     assert book.dry_run is True
     assert book.max_notional_eur == pytest.approx(40)
 
@@ -211,7 +213,7 @@ def test_stop_beats_any_green_and_target_uses_bracket_ratchet():
 
     db2 = _session()
     _idea(db2, symbol="BTC-EUR", entry_price=100, stop_price=90, target_price=130)
-    trailed = start_session(db2, bankroll_eur=200, sources=["trade_ideas"], any_green=False)
+    trailed = start_session(db2, bankroll_eur=200, sources=["trade_ideas"], any_green=False, strategy="any_green")
     asyncio.run(tick_session(db2, trailed.id, quotes=[_quote("BTC-EUR", 100)]))
     held = asyncio.run(tick_session(db2, trailed.id, quotes=[_quote("BTC-EUR", 120)]))
     assert held["session"]["open_count"] == 1
@@ -222,7 +224,9 @@ def test_stop_beats_any_green_and_target_uses_bracket_ratchet():
 
 def test_gainers_are_paper_only_and_do_not_refill_a_copied_symbol():
     db = _session()
-    book = start_session(db, bankroll_eur=200, sources=["gainers"], gainer_limit=1, position_pct=0.10)
+    book = start_session(
+        db, bankroll_eur=200, sources=["gainers"], gainer_limit=1, position_pct=0.10, strategy="any_green"
+    )
     first = asyncio.run(
         tick_session(
             db,

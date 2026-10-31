@@ -28,7 +28,13 @@ class CopySession(SQLModel, table=True):
     position_pct: float
     max_notional_eur: float
     max_positions: int
-    any_green: bool = Field(default=True)
+    any_green: bool = Field(default=False)
+    # "symmetric" = Helm TP/SL brackets on scout's top ideas (default).
+    # "any_green" = legacy overnight copy mode, kept for old rows.
+    strategy: str = Field(default="symmetric")
+    tp_pct: Optional[float] = None
+    sl_pct: Optional[float] = None
+    max_new_per_day: Optional[int] = None
     sources: str = Field(default="trade_ideas,gainers")
     gainer_limit: int = Field(default=3)
     lookback_hours: float = Field(default=24.0)

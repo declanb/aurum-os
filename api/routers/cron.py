@@ -20,6 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Header
 from sqlmodel import Session, select
 
+from api.services import helm_strategy
 from api.core.config import settings
 from api.core.db import engine
 from api.models.trade import ExitBracket, TradeIdea as Trade
@@ -126,6 +127,8 @@ async def scout_tick(authorization: Optional[str] = Header(None)):
     staged_ids = []
     skipped = []
 
+    # Helm conviction cap: stage the highest-confidence ideas first.
+    recs = helm_strategy.rank_recs(recs)
     for rec in recs:
         symbol = rec.get("symbol")
 

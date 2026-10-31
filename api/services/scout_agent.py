@@ -42,7 +42,7 @@ from sqlmodel import Session
 
 from api.core.config import settings
 from api.core.db import engine
-from api.services import agent_registry, ai_advisor, auto_approver
+from api.services import agent_registry, ai_advisor, auto_approver, helm_strategy
 from api.services.personal_edge import compute_edge_fingerprint
 
 # Logging setup
@@ -142,6 +142,8 @@ async def scout_loop(playbook_id: str, symbols: list[str], poll_minutes: int) ->
             # Evaluate each
             approved_count = 0
             staged_count = 0
+            # Helm conviction cap: stage the highest-confidence ideas first.
+            recs = helm_strategy.rank_recs(recs)
             for rec in recs:
                 symbol = rec.get("symbol")
 

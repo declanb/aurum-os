@@ -12,8 +12,19 @@ a copy trader would chase:
 Fills are virtual. Marks use the bid when a ticker has one, matching the
 exit-bracket mark. Optional stop and target fields use the same bid checks
 as ``evaluate_long_bracket`` and, when both levels are valid, the same
-trailing ratchet. Any-green closes a paper long once sell-side P&L is
-positive. Nothing in this module submits, cancels, or amends a broker order.
+trailing ratchet.
+
+Strategy modes:
+
+* ``symmetric`` (default for new sessions). Helm's approved rule: scout's
+  top ideas by confidence, at most HELM_MAX_IDEAS_PER_DAY new positions per
+  UTC day, a fixed EUR notional per position (HELM_PAPER_POSITION_EUR), and a
+  plain take-profit +HELM_TP_PCT / stop-loss -HELM_SL_PCT bracket net of the
+  sell fee. No trailing ratchet and no any-green exit.
+* ``any_green`` (legacy overnight copy mode). Any-green closes a paper long
+  once sell-side P&L is positive.
+
+Nothing in this module submits, cancels, or amends a broker order.
 
 Symbol storage matches the rest of Helm: ``UNI/EUR`` from a ticker becomes
 ``UNI-EUR`` on the row. Spot EUR pairs only.
@@ -37,7 +48,7 @@ from sqlmodel import Session, SQLModel, create_engine, select
 from api.core.config import settings
 from api.models.copy_book import CopyPosition, CopySession
 from api.models.trade import ExecutionTicket, TradeIdea
-from api.services import market_data
+from api.services import helm_strategy, market_data
 from api.services.exit_bracket import evaluate_long_bracket
 from api.services.live_positions import TAKER_FEE, sale_pnl
 
@@ -53,6 +64,8 @@ NAME_CAP_FRACTION = 0.25
 MIN_NOTIONAL_EUR = 1.0
 FEE_MODEL = "sell_taker_0.09pct"
 SIGNAL_STATUSES = ("Ready for Approval", "Approved")
+STRATEGIES = ("symmetric", "any_green")
+REVX_PUBLIC_TICKERS_PATH = "/api/1.0/public/tickers"
 
 
 class CopyBookError(ValueError):
@@ -211,7 +224,7 @@ def rank_eur_gainers(rows: Optional[list[dict]], limit: int) -> list[dict]:
     return ranked[:limit]
 
 
-def decide_exit(pos: CopyPosition, mark: float, any_green: bool) -> ExitDecision:
+def decide_exit(pos: CopyPosition, mark: float, any_green: bool, symmetric: bool = False) -> ExitDecision:
     """Paper exit. Stop and target follow the exit-bracket bid checks.
 
     When both a protective stop and a target are stored, the trailing ratchet
@@ -221,6 +234,13 @@ def decide_exit(pos: CopyPosition, mark: float, any_green: bool) -> ExitDecision
     high = pos.high_water_price if pos.high_water_price and pos.high_water_price > 0 else pos.entry_price
     if mark > high:
         high = mark
+    if symmetric:
+        # Helm symmetric bracket: fixed stop and target, stop checked first.
+        if pos.stop_price is not None and pos.stop_price > 0 and mark <= pos.stop_price:
+            return ExitDecision("hard_stop", pos.stop_price, high)
+        if pos.target_price is not None and pos.target_price > 0 and mark >= pos.target_price:
+            return ExitDecision("take_profit", pos.stop_price, high)
+        return ExitDecision("hold", pos.stop_price, high)
     stop = pos.stop_price
     initial = pos.initial_stop_price
     target = pos.target_price
@@ -411,6 +431,10 @@ def snapshot(db: Session, book: Optional[CopySession], quotes: Optional[dict[str
                 "max_notional_eur": book.max_notional_eur,
                 "max_positions": book.max_positions,
                 "any_green": book.any_green,
+                "strategy": getattr(book, "strategy", None) or "any_green",
+                "tp_pct": getattr(book, "tp_pct", None),
+                "sl_pct": getattr(book, "sl_pct", None),
+                "max_new_per_day": getattr(book, "max_new_per_day", None),
                 "sources": [part for part in book.sources.split(",") if part],
                 "gainer_limit": book.gainer_limit,
                 "lookback_hours": book.lookback_hours,
@@ -421,9 +445,40 @@ def snapshot(db: Session, book: Optional[CopySession], quotes: Optional[dict[str
             },
             "open_positions": open_rows,
             "closed_trades": closed_rows,
+            "summary": summarize(positions, book, unrealized, equity),
         }
     )
     return base
+
+
+def summarize(positions: list[CopyPosition], book: CopySession, unrealized: float, equity: float) -> dict:
+    """Week-test scorecard: realised, open, win rate, avg win/loss, fees."""
+    closed = [pos for pos in positions if pos.status != "open"]
+    wins = [float(pos.realized_pnl_eur or 0) for pos in closed if (pos.realized_pnl_eur or 0) > 0]
+    losses = [float(pos.realized_pnl_eur or 0) for pos in closed if (pos.realized_pnl_eur or 0) <= 0]
+    fees = sum(float(pos.exit_fee_eur or 0) + float(pos.entry_fee_eur or 0) for pos in closed)
+    reasons: dict[str, int] = {}
+    for pos in closed:
+        key = pos.exit_reason or "unknown"
+        reasons[key] = reasons.get(key, 0) + 1
+    avg_win = sum(wins) / len(wins) if wins else None
+    avg_loss = sum(losses) / len(losses) if losses else None
+    return {
+        "strategy": getattr(book, "strategy", None) or "any_green",
+        "realized_pnl_eur": _money(book.realized_pnl_eur),
+        "unrealized_pnl_eur": _money(unrealized),
+        "equity_eur": _money(equity),
+        "return_pct": _money((equity / book.starting_bankroll_eur - 1.0) * 100.0) if book.starting_bankroll_eur else None,
+        "open_count": sum(1 for pos in positions if pos.status == "open"),
+        "closed_count": len(closed),
+        "wins": len(wins),
+        "losses": len(losses),
+        "win_rate_pct": _money(len(wins) / len(closed) * 100.0) if closed else None,
+        "avg_win_eur": None if avg_win is None else _money(avg_win),
+        "avg_loss_eur": None if avg_loss is None else _money(avg_loss),
+        "fees_eur": _money(fees),
+        "exit_reasons": reasons,
+    }
 
 
 def start_session(
@@ -433,12 +488,17 @@ def start_session(
     position_pct: Optional[float] = None,
     max_notional_eur: Optional[float] = None,
     max_positions: Optional[int] = None,
-    any_green: bool = True,
+    any_green: Optional[bool] = None,
     sources: Optional[list[str] | str] = None,
     gainer_limit: Optional[int] = None,
     lookback_hours: float = 24.0,
     dry_run: bool = True,
     now: Optional[datetime] = None,
+    strategy: Optional[str] = None,
+    tp_pct: Optional[float] = None,
+    sl_pct: Optional[float] = None,
+    max_new_per_day: Optional[int] = None,
+    position_eur: Optional[float] = None,
 ) -> CopySession:
     """Open a paper session. Refuses when another session is already running."""
     if dry_run is not True:
@@ -452,9 +512,43 @@ def start_session(
             int(running.id),
         )
 
+    if strategy is None:
+        # Back-compat: an explicit any_green=True without a strategy is the legacy mode.
+        strategy = "any_green" if any_green else "symmetric"
+    strategy = strategy.strip().lower()
+    if strategy not in STRATEGIES:
+        raise CopyBookError("strategy must be symmetric or any_green.")
+    symmetric = strategy == "symmetric"
+    if symmetric and any_green:
+        raise CopyBookError("any_green is off in the symmetric strategy. Use strategy=any_green for the legacy mode.")
+    any_green = False if symmetric else (True if any_green is None else bool(any_green))
+
     bankroll = float(settings.HELM_COPY_BANKROLL_EUR if bankroll_eur is None else bankroll_eur)
     if not math.isfinite(bankroll) or bankroll <= 0 or bankroll > 1_000_000:
         raise CopyBookError("bankroll_eur must be a positive number up to 1000000.")
+    tp_value = sl_value = None
+    daily_cap = None
+    if symmetric:
+        tp_value = float(helm_strategy.tp_pct() if tp_pct is None else tp_pct)
+        sl_value = float(helm_strategy.sl_pct() if sl_pct is None else sl_pct)
+        for label, val in (("tp_pct", tp_value), ("sl_pct", sl_value)):
+            if not math.isfinite(val) or val <= 0 or val >= 50:
+                raise CopyBookError(f"{label} must be greater than 0 and under 50.")
+        daily_cap = int(helm_strategy.max_ideas_per_day() if max_new_per_day is None else max_new_per_day)
+        if daily_cap < 1 or daily_cap > 20:
+            raise CopyBookError("max_new_per_day must be from 1 to 20.")
+        per_position = float(settings.HELM_PAPER_POSITION_EUR if position_eur is None else position_eur)
+        if not math.isfinite(per_position) or per_position <= 0:
+            raise CopyBookError("position_eur must be positive.")
+        # Fixed EUR per position: pct and cap both resolve to the same amount.
+        if max_notional_eur is None:
+            max_notional_eur = per_position
+        if position_pct is None:
+            position_pct = NAME_CAP_FRACTION
+        if max_positions is None:
+            max_positions = max(1, min(20, int(bankroll // max(per_position, 1e-9)) or 1))
+        if sources is None:
+            sources = ["trade_ideas"]
     pct = float(settings.HELM_COPY_POSITION_PCT if position_pct is None else position_pct)
     if not math.isfinite(pct) or pct <= 0 or pct > NAME_CAP_FRACTION:
         raise CopyBookError("position_pct must be greater than 0 and at most 0.25.")
@@ -482,6 +576,10 @@ def start_session(
         max_notional_eur=cap,
         max_positions=count,
         any_green=bool(any_green),
+        strategy=strategy,
+        tp_pct=tp_value,
+        sl_pct=sl_value,
+        max_new_per_day=daily_cap,
         sources=_parse_sources(sources),
         gainer_limit=gainers,
         lookback_hours=float(lookback_hours),
@@ -500,6 +598,19 @@ def start_session(
         book.sources,
     )
     return book
+
+
+def _is_symmetric(book: CopySession) -> bool:
+    return (getattr(book, "strategy", None) or "any_green") == "symmetric"
+
+
+def _symmetric_levels(book: CopySession, price: float) -> tuple[float, float]:
+    return helm_strategy.bracket_levels(price, book.tp_pct, book.sl_pct)
+
+
+def _opened_today(positions: list[CopyPosition], now: datetime) -> int:
+    start = helm_strategy.day_start(now)
+    return sum(1 for pos in positions if (_aware(pos.opened_at) or start) >= start)
 
 
 def _idea_is_fresh(idea: TradeIdea, book: CopySession, now: datetime) -> bool:
@@ -533,6 +644,9 @@ def _collect_signals(
             ).all()
         )
         ideas.sort(key=lambda idea: _aware(idea.created_at) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        if _is_symmetric(book):
+            # Scout's existing score (Conf NN), strongest first; newest breaks ties.
+            ideas.sort(key=lambda idea: -helm_strategy.idea_score(idea))
         for idea in ideas:
             symbol = to_db_symbol(idea.symbol or "")
             if idea.id in taken_ids:
@@ -555,7 +669,10 @@ def _collect_signals(
             if price is None:
                 skipped.append({"symbol": symbol, "trade_idea_id": idea.id, "reason": "no_quote"})
                 continue
-            stop, target = protective_levels(price, idea.stop_price, idea.target_price)
+            if _is_symmetric(book):
+                stop, target = _symmetric_levels(book, price)
+            else:
+                stop, target = protective_levels(price, idea.stop_price, idea.target_price)
             reason = f"TradeIdea #{idea.id} {idea.status}. {(idea.thesis or '').strip()}"
             signals.append(
                 CopySignal(
@@ -577,6 +694,9 @@ def _collect_signals(
                 skipped.append({"symbol": symbol, "reason": "symbol_already_signaled"})
                 continue
             change = row["change_24h_pct"]
+            g_stop, g_target = (None, None)
+            if _is_symmetric(book):
+                g_stop, g_target = _symmetric_levels(book, float(row["buy_price"]))
             signals.append(
                 CopySignal(
                     symbol=symbol,
@@ -587,8 +707,8 @@ def _collect_signals(
                     ),
                     trade_idea_id=None,
                     buy_price=float(row["buy_price"]),
-                    stop_price=None,
-                    target_price=None,
+                    stop_price=g_stop,
+                    target_price=g_target,
                 )
             )
             seen_symbols.add(symbol)
@@ -659,7 +779,7 @@ def _settle_close(book: CopySession, pos: CopyPosition, mark: float, reason: str
 
 
 def _apply_mark(pos: CopyPosition, mark: float, book: CopySession, now: datetime) -> str:
-    decision = decide_exit(pos, mark, book.any_green)
+    decision = decide_exit(pos, mark, book.any_green, symmetric=_is_symmetric(book))
     pos.high_water_price = decision.high_water_price
     if decision.stop_price is not None:
         pos.stop_price = decision.stop_price
@@ -672,9 +792,45 @@ def _apply_mark(pos: CopyPosition, mark: float, book: CopySession, now: datetime
     return decision.action
 
 
-async def _load_quotes(quotes: Optional[list[dict]]) -> tuple[list[dict], Optional[str]]:
+async def fetch_public_tickers(timeout: float = 10.0) -> list[dict]:
+    """Revolut X public tickers. No API key. Read-only."""
+    import httpx
+
+    url = settings.REVX_API_BASE_URL.rstrip("/") + REVX_PUBLIC_TICKERS_PATH
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        payload = resp.json()
+    rows = payload.get("data") if isinstance(payload, dict) else payload
+    out = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        if "last" not in item and item.get("last_price") is not None:
+            item["last"] = item["last_price"]
+        # Public rows carry an absolute 24h change; derive the open from it.
+        try:
+            last = float(item.get("last"))
+            delta = float(item.get("price_change_24h"))
+            if "open_24h" not in item and last - delta > 0:
+                item["open_24h"] = last - delta
+        except (TypeError, ValueError):
+            pass
+        out.append(item)
+    return out
+
+
+async def _load_quotes(quotes: Optional[list[dict]], public: Optional[bool] = None) -> tuple[list[dict], Optional[str]]:
     if quotes is not None:
         return list(quotes), None
+    use_public = settings.HELM_COPY_PUBLIC_QUOTES if public is None else public
+    if use_public:
+        try:
+            return await fetch_public_tickers(), None
+        except Exception:
+            logger.warning("Paper copy book public ticker read failed")
+            return [], "public ticker read failed"
     try:
         rows = await market_data.get_tickers(None)
     except Exception:
@@ -688,6 +844,7 @@ async def tick_session(
     session_id: Optional[int] = None,
     quotes: Optional[list[dict]] = None,
     now: Optional[datetime] = None,
+    public_quotes: Optional[bool] = None,
 ) -> dict:
     """Mark open paper positions, exit them, then paper-buy fresh signals.
 
@@ -703,7 +860,7 @@ async def tick_session(
     _assert_paper(book)
 
     moment = now or utcnow()
-    quote_rows, quote_error = await _load_quotes(quotes)
+    quote_rows, quote_error = await _load_quotes(quotes, public_quotes)
     indexed = index_quotes(quote_rows)
     positions = _positions(db, int(book.id))
     opened: list[dict] = []
@@ -739,7 +896,14 @@ async def tick_session(
     skipped.extend(signal_skips)
     open_positions = [pos for pos in positions if pos.status == "open"]
 
+    daily_left = None
+    if _is_symmetric(book) and book.max_new_per_day:
+        daily_left = max(0, int(book.max_new_per_day) - _opened_today(positions, moment))
+
     for signal in signals:
+        if daily_left is not None and daily_left <= 0:
+            skipped.append({"symbol": signal.symbol, "trade_idea_id": signal.trade_idea_id, "reason": "daily_cap"})
+            continue
         if len(open_positions) >= book.max_positions:
             skipped.append({"symbol": signal.symbol, "trade_idea_id": signal.trade_idea_id, "reason": "max_positions"})
             continue
@@ -756,6 +920,8 @@ async def tick_session(
         open_positions.append(pos)
         positions.append(pos)
         used_symbols.add(pos.symbol)
+        if daily_left is not None:
+            daily_left -= 1
         opened.append(
             {
                 "id": pos.id,
@@ -798,6 +964,7 @@ async def stop_session(
     quotes: Optional[list[dict]] = None,
     flatten: bool = True,
     now: Optional[datetime] = None,
+    public_quotes: Optional[bool] = None,
 ) -> dict:
     """Stop a paper session. Flattening sells the virtual coins at the mark."""
     book = resolve_session(db, session_id)
@@ -811,7 +978,7 @@ async def stop_session(
     quote_error = None
     indexed: dict[str, dict] = {}
     if flatten:
-        quote_rows, quote_error = await _load_quotes(quotes)
+        quote_rows, quote_error = await _load_quotes(quotes, public_quotes)
         indexed = index_quotes(quote_rows)
         for pos in _positions(db, int(book.id)):
             if pos.status != "open":
@@ -888,6 +1055,7 @@ def smoke() -> dict:
             max_notional_eur=40,
             sources=["trade_ideas"],
             any_green=True,
+            strategy="any_green",
             dry_run=True,
         )
         idea = TradeIdea(
@@ -947,32 +1115,72 @@ def _cli_session() -> Session:
     return Session(engine)
 
 
+def init_local_db() -> dict:
+    """Create tables on a local SQLite DATABASE_URL. Refuses anything else."""
+    from api.core.db import engine
+    import api.models  # noqa: F401
+
+    url = str(engine.url)
+    if not url.startswith("sqlite"):
+        raise CopyBookRefused("init-db only runs against a local SQLite DATABASE_URL. Use Alembic for Postgres.")
+    SQLModel.metadata.create_all(engine)
+    return {"dry_run": True, "live_orders": False, "database": url, "created": True}
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Helm paper copy book. Never submits a broker order.")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    def _public_flag(p):
+        p.add_argument(
+            "--public-quotes",
+            dest="public_quotes",
+            action="store_true",
+            default=None,
+            help="Mark with Revolut X public tickers (no API key).",
+        )
+
     start = sub.add_parser("start", help="Start a dry-run session")
     start.add_argument("--bankroll", type=float, default=None)
-    start.add_argument("--sources", default="trade_ideas,gainers")
-    start.add_argument("--any-green", dest="any_green", action="store_true", default=True)
+    start.add_argument("--sources", default=None, help="trade_ideas (symmetric default) and/or gainers")
+    start.add_argument("--strategy", choices=STRATEGIES, default=None, help="symmetric (default) or any_green (legacy)")
+    start.add_argument("--any-green", dest="any_green", action="store_true", default=None,
+                       help="Legacy mode only (--strategy any_green)")
     start.add_argument("--no-any-green", dest="any_green", action="store_false")
+    start.add_argument("--tp", type=float, default=None, help="Take-profit percent, net of fees")
+    start.add_argument("--sl", type=float, default=None, help="Stop-loss percent, net of fees")
+    start.add_argument("--max-per-day", type=int, default=None)
+    start.add_argument("--position-eur", type=float, default=None)
     start.add_argument("--lookback-hours", type=float, default=24.0)
 
-    tick = sub.add_parser("tick", help="Mark, exit, and paper-buy once")
+    tick = sub.add_parser("tick", help="Mark, exit, and paper-buy once (scheduler entry point)")
     tick.add_argument("--session-id", type=int, default=None)
+    tick.add_argument("--quiet", action="store_true", help="Print only the summary and tick block")
+    _public_flag(tick)
 
-    status = sub.add_parser("status", help="Print the session, positions, and P&L")
+    status = sub.add_parser("status", help="Print the session, positions, P&L, and summary")
     status.add_argument("--session-id", type=int, default=None)
+    status.add_argument("--summary", action="store_true", help="Print only the summary")
+    _public_flag(status)
 
     stop = sub.add_parser("stop", help="Stop the session and flatten paper positions")
     stop.add_argument("--session-id", type=int, default=None)
     stop.add_argument("--no-flatten", dest="flatten", action="store_false", default=True)
+    _public_flag(stop)
 
+    sub.add_parser("init-db", help="Create tables on a local SQLite DATABASE_URL")
     sub.add_parser("smoke", help="In-memory open, mark, and close. No network.")
 
     args = parser.parse_args(argv)
     if args.command == "smoke":
         _print(smoke())
+        return 0
+    if args.command == "init-db":
+        try:
+            _print(init_local_db())
+        except CopyBookError as exc:
+            _print({"dry_run": True, "live_orders": False, "error": str(exc)})
+            return 1
         return 0
 
     with _cli_session() as db:
@@ -984,6 +1192,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                     sources=args.sources,
                     any_green=args.any_green,
                     lookback_hours=args.lookback_hours,
+                    strategy=args.strategy,
+                    tp_pct=args.tp,
+                    sl_pct=args.sl,
+                    max_new_per_day=args.max_per_day,
+                    position_eur=args.position_eur,
                     dry_run=True,
                 )
             except CopyBookError as exc:
@@ -993,18 +1206,31 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
         if args.command == "status":
             book = resolve_session(db, args.session_id)
-            _print(snapshot(db, book))
+            indexed: dict[str, dict] = {}
+            if args.public_quotes and book is not None:
+                rows, _err = asyncio.run(_load_quotes(None, True))
+                indexed = index_quotes(rows)
+            picture = snapshot(db, book, indexed)
+            _print(picture.get("summary") or picture if args.summary else picture)
             return 0
         if args.command == "tick":
             try:
-                _print(asyncio.run(tick_session(db, args.session_id)))
+                picture = asyncio.run(tick_session(db, args.session_id, public_quotes=args.public_quotes))
             except CopyBookError as exc:
                 _print({"dry_run": True, "live_orders": False, "error": str(exc)})
                 return 1
+            if args.quiet:
+                picture = {
+                    "dry_run": picture["dry_run"],
+                    "live_orders": picture["live_orders"],
+                    "summary": picture.get("summary"),
+                    "tick": picture.get("tick"),
+                }
+            _print(picture)
             return 0
         if args.command == "stop":
             try:
-                _print(asyncio.run(stop_session(db, args.session_id, flatten=args.flatten)))
+                _print(asyncio.run(stop_session(db, args.session_id, flatten=args.flatten, public_quotes=args.public_quotes)))
             except CopyBookError as exc:
                 _print({"dry_run": True, "live_orders": False, "error": str(exc)})
                 return 1
