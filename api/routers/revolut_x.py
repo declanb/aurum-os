@@ -190,6 +190,13 @@ async def execute_trade(
     trade = session.get(TradeIdea, trade_id)
     if not trade:
         raise HTTPException(status_code=404, detail="Trade idea not found")
+    from api.services.metaapi_venue import is_metaapi_idea
+
+    if is_metaapi_idea(session, trade_id):
+        raise HTTPException(
+            status_code=400,
+            detail="This is a MetaApi commodities idea. Execute it via /api/metaapi/execute.",
+        )
     if trade.status != "Approved":
         raise HTTPException(
             status_code=400,

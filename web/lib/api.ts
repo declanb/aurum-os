@@ -830,3 +830,89 @@ export async function markAllProfitNotificationsRead(): Promise<ProfitNotificati
         return null;
     }
 }
+
+// ── Helm commodities venue (MetaApi, paper by default) ────────────────────
+
+export type MetaApiStatus = {
+    venue: string;
+    configured: boolean;
+    mode: "paper" | "live";
+    live_orders: boolean;
+    max_lots: number;
+    allowed_symbols: string[];
+    min_margin_level_pct: number;
+    swap_pct_per_night: number;
+    warning: string;
+};
+
+export type MetaApiIdeaView = {
+    trade_idea_id: number;
+    symbol: string;
+    direction: string;
+    entry_price: number;
+    stop_price: number;
+    target_price: number;
+    thesis: string;
+    status: string;
+    lots: number;
+    leveraged_ok: boolean;
+    source: string;
+    guardian: { passed: boolean; issues: string[]; warnings: string[] };
+};
+
+export type MetaApiPaperRow = {
+    id: number;
+    symbol: string;
+    direction: string;
+    lots: number;
+    entry_price: number;
+    stop_price: number;
+    target_price: number;
+    last_mark: number | null;
+    spread_cost: number;
+    swap_estimate: number;
+    unrealized_pnl: number | null;
+    realized_pnl: number | null;
+    exit_reason: string | null;
+    opened_at: string;
+};
+
+export type MetaApiLedger = {
+    currency: string;
+    open: MetaApiPaperRow[];
+    closed: MetaApiPaperRow[];
+    unrealized_pnl: number;
+    realized_pnl: number;
+};
+
+async function metaGet<T>(path: string): Promise<T | null> {
+    try {
+        const res = await fetch(`${API_URL}/metaapi${path}`, { cache: "no-store" });
+        if (!res.ok) return null;
+        return res.json();
+    } catch (error) {
+        console.error(error);
+        return null;
+    }
+}
+
+async function metaPost<T>(path: string, body?: unknown): Promise<T> {
+    const res = await fetch(`${API_URL}/metaapi${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `HTTP ${res.status}`);
+    return data as T;
+}
+
+export const fetchMetaApiStatus = () => metaGet<MetaApiStatus>("/status");
+export const fetchMetaApiIdeas = () => metaGet<MetaApiIdeaView[]>("/ideas");
+export const fetchMetaApiLedger = () => metaGet<MetaApiLedger>("/paper");
+export const runMetaApiScout = () => metaPost<{ staged: unknown[]; skipped: unknown[] }>("/scout");
+export const markMetaApiPaper = () => metaPost<unknown>("/paper/mark");
+export const closeMetaApiPaper = (id: number) => metaPost<unknown>(`/paper/${id}/close`);
+export const ackMetaApiLeverage = (tradeId: number, leveragedOk: boolean) =>
+    metaPost<unknown>(`/ideas/${tradeId}/ack`, { leveraged_ok: leveragedOk });
+export const executeMetaApiIdea = (tradeId: number) => metaPost<unknown>(`/execute/${tradeId}`);

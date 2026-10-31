@@ -13,6 +13,7 @@ from api.routers import exits
 from api.routers import notifications
 from api.routers import advisor
 from api.routers import copy_book
+from api.routers import metaapi
 
 app = FastAPI(
     title="AURUM OS API",
@@ -52,3 +53,4 @@ app.include_router(exits.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(advisor.router, prefix="/api")
 app.include_router(copy_book.router, prefix="/api")
+app.include_router(metaapi.router, prefix="/api")
